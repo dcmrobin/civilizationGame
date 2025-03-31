@@ -635,23 +635,26 @@
                 // Land units movement rules
                 if (tile.name === 'Ocean') return false;
                 if (tile.name === 'Coast') return (unit.type === 'SETTLER'); // Only settlers can cross coast
-                return true; // All other land tiles
             }
             
-            // For pathfinding, we don't care about move distance or other units
+            // If ignoring units (e.g., for pathfinding), skip unit checks
             if (ignoreUnits) {
                 return true;
             }
             
             // Check if tile is occupied by another unit
             const otherUnit = findUnitAt(x, y);
-            if (otherUnit && otherUnit.player !== unit.player) {
-                return canAttack(unit, otherUnit);
-            } else if (otherUnit) {
-                return false; // Can't move onto friendly units
+            if (otherUnit) {
+                if (otherUnit.player !== unit.player) {
+                    // If the other unit belongs to an enemy, check if it can be attacked
+                    return canAttack(unit, otherUnit);
+                } else {
+                    // Prevent stacking on friendly units
+                    return false;
+                }
             }
             
-            return true;
+            return true; // Tile is valid for movement
         }
 
         // Check if a unit can attack another unit or a city
