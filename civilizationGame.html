@@ -1,0 +1,1534 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Civilization</title>
+    <style>
+        .unit {
+            user-select: none; /* Prevent text selection */
+            -webkit-user-select: none; /* For Safari */
+            -moz-user-select: none; /* For Firefox */
+            -ms-user-select: none; /* For IE/Edge */
+            pointer-events: none; /* Make the text non-interactive */
+        }
+        .tile {
+            cursor: pointer; /* Show pointer cursor when hovering over tiles */
+        }
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+            margin: 0;
+            padding: 20px;
+        }
+        #game-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        #map {
+            display: grid;
+            grid-template-columns: repeat(40, 20px);
+            grid-template-rows: repeat(25, 20px);
+            gap: 1px;
+            margin-bottom: 20px;
+            border: 2px solid #333;
+        }
+        .tile {
+            width: 20px;
+            height: 20px;
+            box-sizing: border-box;
+            position: relative;
+        }
+        .selected-tile {
+            outline: 2px solid yellow;
+            outline-offset: -2px;
+            z-index: 3;
+        }
+        .ocean { background-color: #1a6bb3; }
+        .coast { background-color: #3a86d4; }
+        .grassland { background-color: #6aa84f; }
+        .plains { background-color: #b7b854; }
+        .desert { background-color: #e3d08b; }
+        .mountains { background-color: #999999; }
+        .forest { background-color: #38761d; }
+        
+        .unit {
+            position: absolute;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            top: 2px;
+            left: 2px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            font-weight: bold;
+            color: white;
+            text-shadow: 1px 1px 1px black;
+            z-index: 2;
+        }
+        .city {
+            position: absolute;
+            width: 16px;
+            height: 16px;
+            top: 2px;
+            left: 2px;
+            background-color: rgba(0,0,0,0.5);
+            border: 1px solid white;
+            z-index: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            font-weight: bold;
+            color: white;
+        }
+        
+        .player1 { background-color: #e60000; }
+        .player2 { background-color: #0047ab; }
+        .player3 { background-color: #ff8c00; }
+        .player4 { background-color: #9932cc; }
+        
+        #info-panel {
+            width: 800px;
+            padding: 10px;
+            background-color: #ddd;
+            border: 1px solid #999;
+            margin-bottom: 10px;
+        }
+        #controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        button {
+            padding: 5px 10px;
+            cursor: pointer;
+        }
+        #diplomacy-panel, #city-panel {
+            width: 800px;
+            padding: 10px;
+            background-color: #eee;
+            border: 1px solid #999;
+            margin-bottom: 10px;
+            display: none;
+        }
+        .relation-bar {
+            height: 20px;
+            background-color: #ddd;
+            margin: 5px 0;
+            position: relative;
+        }
+        .relation-fill {
+            height: 100%;
+            background-color: #4CAF50;
+        }
+        .relation-text {
+            position: absolute;
+            top: 0;
+            left: 5px;
+            line-height: 20px;
+            color: black;
+        }
+        .tech-item {
+            padding: 5px;
+            margin: 2px 0;
+            background-color: #f8f8f8;
+            border: 1px solid #ccc;
+            cursor: pointer;
+        }
+        .tech-item.researched {
+            background-color: #d4edda;
+        }
+        .tech-item.available {
+            background-color: #fff3cd;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <h1>Simple Civilization</h1>
+
+        <div id="log-panel" style="width: 800px; height: 150px; overflow-y: auto; background-color: #f8f8f8; border: 1px solid #999; padding: 1px; margin-bottom: 1px;">
+            <h3>Game Log</h3>
+            <div id="log-content" style="height: 100px; overflow-y: auto;"></div>
+        </div>
+
+        <div id="info-panel">
+            <div>Turn: <span id="turn-counter">1</span></div>
+            <div>Gold: <span id="gold-counter">50</span></div>
+            <div>Research: <span id="research-counter">0</span>/<span id="research-needed">50</span> (<span id="current-tech">None</span>)</div>
+        </div>
+        <div id="controls">
+            <button id="end-turn-btn">End Turn</button>
+            <button id="diplomacy-btn">Diplomacy</button>
+            <button id="tech-btn">Technology</button>
+            <button id="new-game-btn">New Game</button>
+        </div>
+        <div id="map"></div>
+        
+        <div id="diplomacy-panel">
+            <h3>Diplomatic Relations</h3>
+            <div id="relations-container"></div>
+            <button id="close-diplomacy">Close</button>
+        </div>
+        
+        <div id="tech-panel" style="display: none; width: 800px; padding: 10px; background-color: #eee; border: 1px solid #999; margin-bottom: 10px;">
+            <h3>Technology Tree</h3>
+            <div id="tech-tree"></div>
+            <button id="close-tech">Close</button>
+        </div>
+        
+        <div id="city-panel">
+            <h3>City Management</h3>
+            <div id="city-info"></div>
+            <div id="city-production"></div>
+            <button id="close-city">Close</button>
+        </div>
+    </div>
+
+    <script>
+        // Game constants
+        const TILE_TYPES = {
+            OCEAN: { name: 'Ocean', moveCost: 1, food: 1, production: 0, color: 'ocean' },
+            COAST: { name: 'Coast', moveCost: 1, food: 2, production: 0, color: 'coast' },
+            GRASSLAND: { name: 'Grassland', moveCost: 1, food: 2, production: 1, color: 'grassland' },
+            PLAINS: { name: 'Plains', moveCost: 1, food: 1, production: 2, color: 'plains' },
+            DESERT: { name: 'Desert', moveCost: 2, food: 0, production: 1, color: 'desert' },
+            MOUNTAINS: { name: 'Mountains', moveCost: 3, food: 0, production: 3, color: 'mountains' },
+            FOREST: { name: 'Forest', moveCost: 2, food: 1, production: 2, color: 'forest' }
+        };
+
+        const UNIT_TYPES = {
+            SETTLER: { name: 'Settler', cost: 30, strength: 0, move: 1, production: ['CITY'], foodConsumption: 2 },
+            WARRIOR: { name: 'Warrior', cost: 10, strength: 2, move: 1, production: ['CITY'], foodConsumption: 1 },
+            ARCHER: { name: 'Archer', cost: 20, strength: 1, move: 2, production: ['CITY'], requires: 'ARCHERY', foodConsumption: 1 },//need range combat mechanic
+            SPEARMAN: { name: 'Spearman', cost: 20, strength: 3, move: 1, production: ['CITY'], requires: 'BRONZE_WORKING', foodConsumption: 1 },
+            GALLEY: { name: 'Galley', cost: 30, strength: 1, move: 3, production: ['PORT'], naval: true, foodConsumption: 2 }
+        };
+
+        const TECH_TREE = {
+            POTTERY: { name: 'Pottery', cost: 50, leadsTo: ['WRITING'], description: 'Allows Granary building' },
+            WRITING: { name: 'Writing', cost: 80, leadsTo: ['PHILOSOPHY'], description: 'Allows Libraries and diplomatic agreements' },
+            PHILOSOPHY: { name: 'Philosophy', cost: 120, leadsTo: ['EDUCATION'], description: 'Increases research output' },
+            ARCHERY: { name: 'Archery', cost: 60, leadsTo: ['MATHEMATICS'], description: 'Allows Archer units' },
+            MATHEMATICS: { name: 'Mathematics', cost: 100, leadsTo: ['PHYSICS'], description: 'Improves city defenses' },
+            BRONZE_WORKING: { name: 'Bronze Working', cost: 80, leadsTo: ['IRON_WORKING'], description: 'Allows Spearman units' },
+            IRON_WORKING: { name: 'Iron Working', cost: 120, leadsTo: ['STEEL'], description: 'Allows Swordsman units' },
+            EDUCATION: { name: 'Education', cost: 150, leadsTo: ['SCIENTIFIC_THEORY'], description: 'Greatly increases research' },
+            SCIENTIFIC_THEORY: { name: 'Scientific Theory', cost: 200, leadsTo: ['BIOLOGY'], description: 'Allows Universities' }
+        };
+
+        // Game state
+        const gameState = {
+            map: [],
+            players: [],
+            currentPlayer: 0,
+            turn: 1,
+            selectedUnit: null,
+            selectedCity: null,
+            technologies: {},
+            unitDestinations: {}
+        };
+
+        // Perlin noise implementation
+        const Perlin = {
+            gradients: {},
+            dotGridGradient(ix, iy, x, y) {
+                const gradient = this.gradients[`${ix},${iy}`] || this.randomGradient(ix, iy);
+                const dx = x - ix;
+                const dy = y - iy;
+                return dx * gradient[0] + dy * gradient[1];
+            },
+            randomGradient(ix, iy) {
+                const angle = Math.random() * 2 * Math.PI;
+                const gradient = [Math.cos(angle), Math.sin(angle)];
+                this.gradients[`${ix},${iy}`] = gradient;
+                return gradient;
+            },
+            fade(t) {
+                return t * t * t * (t * (t * 6 - 15) + 10);
+            },
+            lerp(a, b, t) {
+                return a + t * (b - a);
+            },
+            noise(x, y) {
+                const x0 = Math.floor(x);
+                const x1 = x0 + 1;
+                const y0 = Math.floor(y);
+                const y1 = y0 + 1;
+
+                const sx = this.fade(x - x0);
+                const sy = this.fade(y - y0);
+
+                const n0 = this.dotGridGradient(x0, y0, x, y);
+                const n1 = this.dotGridGradient(x1, y0, x, y);
+                const ix0 = this.lerp(n0, n1, sx);
+
+                const n2 = this.dotGridGradient(x0, y1, x, y);
+                const n3 = this.dotGridGradient(x1, y1, x, y);
+                const ix1 = this.lerp(n2, n3, sx);
+
+                return this.lerp(ix0, ix1, sy);
+            }
+        };
+
+        // Initialize the game
+        function initGame() {
+            createMap();
+            createPlayers();
+            placePlayers();
+            renderMap();
+            updateUI();
+            
+            // Set up event listeners
+            document.getElementById('end-turn-btn').addEventListener('click', endTurn);
+            document.getElementById('diplomacy-btn').addEventListener('click', showDiplomacy);
+            document.getElementById('tech-btn').addEventListener('click', showTechTree);
+            document.getElementById('new-game-btn').addEventListener('click', initGame);
+            document.getElementById('close-diplomacy').addEventListener('click', hideDiplomacy);
+            document.getElementById('close-tech').addEventListener('click', hideTechTree);
+            document.getElementById('close-city').addEventListener('click', hideCityPanel);
+            document.getElementById('map').addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                const tile = e.target.closest('.tile');
+                if (tile) {
+                    const x = parseInt(tile.dataset.x);
+                    const y = parseInt(tile.dataset.y);
+                    handleTileRightClick(x, y);
+                }
+                return false;
+            });
+        }
+
+        function logMessage(message, playerId = null) {
+            const currentPlayer = gameState.players[gameState.currentPlayer];
+
+            // Filter messages about other players
+            if (playerId !== null && playerId !== currentPlayer.id) {
+                const relation = currentPlayer.relations[playerId];
+                if (!relation || !relation.hasMet) {
+                    return; // Skip logging if the player hasn't met the other player
+                }
+            }
+
+            // Add the message to the log
+            const logContent = document.getElementById('log-content');
+            const logEntry = document.createElement('div');
+
+            // Apply color based on the player's team color
+            if (playerId !== null) {
+                const player = gameState.players[playerId];
+                logEntry.style.color = getPlayerColor(player.color);
+            }
+
+            logEntry.textContent = message;
+            logContent.appendChild(logEntry);
+
+            // Scroll to the bottom of the log
+            logContent.scrollTop = logContent.scrollHeight;
+        }
+
+        // Helper function to get the color for a player's team
+        function getPlayerColor(colorClass) {
+            const colors = {
+                player1: '#e60000', // Red
+                player2: '#0047ab', // Blue
+                player3: '#ff8c00', // Orange
+                player4: '#9932cc'  // Purple
+            };
+            return colors[colorClass] || '#000000'; // Default to black if colorClass is not found
+        }
+
+        // Create the game map
+        function createMap() {
+            const width = 40; // Map width
+            const height = 25; // Map height
+
+            // Generate height, temperature, and humidity maps
+            const heightMap = generateNoiseMap(width, height, 0.1); // Larger scale for smaller features
+            const temperatureMap = generateNoiseMap(width, height, 0.2); // Random temperature distribution
+            const humidityMap = generateNoiseMap(width, height, 0.2); // Random humidity distribution
+
+            // Smooth the height map for more natural transitions
+            const smoothedHeightMap = smoothMap(heightMap, width, height);
+
+            // Create the map based on the generated maps
+            for (let y = 0; y < height; y++) {
+                gameState.map[y] = [];
+                for (let x = 0; x < width; x++) {
+                    const heightValue = smoothedHeightMap[y][x];
+                    const temperatureValue = temperatureMap[y][x];
+                    const humidityValue = humidityMap[y][x];
+
+                    // Determine tile type based on height, temperature, and humidity
+                    let tileType;
+                    if (heightValue < 0.3) {
+                        tileType = TILE_TYPES.OCEAN; // Ocean
+                    } else if (heightValue < 0.4) {
+                        tileType = TILE_TYPES.COAST; // Coast
+                    } else if (heightValue > 0.8) {
+                        tileType = TILE_TYPES.MOUNTAINS; // Mountains
+                    } else if (temperatureValue > 0.7 && humidityValue < 0.3) {
+                        tileType = TILE_TYPES.DESERT; // Desert
+                    } else if (humidityValue > 0.7) {
+                        tileType = TILE_TYPES.FOREST; // Forest
+                    } else if (temperatureValue > 0.5) {
+                        tileType = TILE_TYPES.PLAINS; // Plains
+                    } else {
+                        tileType = TILE_TYPES.GRASSLAND; // Grassland
+                    }
+
+                    gameState.map[y][x] = { ...tileType, x, y };
+                }
+            }
+        }
+
+        // Generate a noise map for height or humidity
+        function generateNoiseMap(width, height, scale) {
+            const map = [];
+            for (let y = 0; y < height; y++) {
+                map[y] = [];
+                for (let x = 0; x < width; x++) {
+                    map[y][x] = noise(x, y, scale); // Use the new Perlin noise function
+                }
+            }
+            return map;
+        }
+
+        function smoothMap(map, width, height) {
+            const smoothedMap = [];
+            for (let y = 0; y < height; y++) {
+                smoothedMap[y] = [];
+                for (let x = 0; x < width; x++) {
+                    let sum = 0;
+                    let count = 0;
+
+                    // Iterate over neighboring tiles (including the current tile)
+                    for (let dy = -1; dy <= 1; dy++) {
+                        for (let dx = -1; dx <= 1; dx++) {
+                            const nx = x + dx;
+                            const ny = y + dy;
+
+                            // Check if the neighbor is within bounds
+                            if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+                                sum += map[ny][nx];
+                                count++;
+                            }
+                        }
+                    }
+
+                    // Average the values
+                    smoothedMap[y][x] = sum / count;
+                }
+            }
+            return smoothedMap;
+        }
+
+        // Generate a temperature map based on latitude and height
+        function generateTemperatureMap(width, height) {
+            const map = [];
+            for (let y = 0; y < height; y++) {
+                map[y] = [];
+                const latitudeFactor = 1 - Math.abs((y / height) - 0.5) * 2; // Closer to equator = warmer
+                for (let x = 0; x < width; x++) {
+                    map[y][x] = latitudeFactor; // Base temperature
+                }
+            }
+            return map;
+        }
+
+        function noise(x, y, scale) {
+            return (Perlin.noise(x * scale, y * scale) + 1) / 2; // Normalize to range [0, 1]
+        }
+
+        // Create players
+        function createPlayers() {
+            gameState.players = [
+                {
+                    id: 0,
+                    name: 'Player',
+                    gold: 50,
+                    research: 0,
+                    currentResearch: null,
+                    researchedTechs: new Set(),
+                    cities: [],
+                    units: [],
+                    color: 'player1',
+                    isHuman: true,
+                    relations: {}
+                }
+            ];
+            
+            // Add AI players
+            const aiColors = ['player2', 'player3', 'player4'];
+            const aiNames = ['Rome', 'Greece', 'Egypt'];
+            
+            for (let i = 0; i < 3; i++) {
+                gameState.players.push({
+                    id: i + 1,
+                    name: aiNames[i],
+                    gold: 50,
+                    research: 0,
+                    currentResearch: null,
+                    researchedTechs: new Set(),
+                    cities: [],
+                    units: [],
+                    color: aiColors[i],
+                    isHuman: false,
+                    relations: {}
+                });
+            }
+            
+            // Initialize relations
+            for (const player of gameState.players) {
+                for (const otherPlayer of gameState.players) {
+                    if (player.id !== otherPlayer.id) {
+                        player.relations[otherPlayer.id] = {
+                            attitude: Math.floor(Math.random() * 20) + 40, // 40-60
+                            hasMet: false
+                        };
+                    }
+                }
+            }
+        }
+
+        // Place players on the map
+        function placePlayers() {
+            const landTiles = [];
+
+            // Find all land tiles
+            for (let y = 0; y < gameState.map.length; y++) {
+                for (let x = 0; x < gameState.map[y].length; x++) {
+                    if (gameState.map[y][x].name !== 'Ocean' && gameState.map[y][x].name !== 'Coast') {
+                        landTiles.push({ x, y });
+                    }
+                }
+            }
+
+            // Shuffle land tiles
+            for (let i = landTiles.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [landTiles[i], landTiles[j]] = [landTiles[j], landTiles[i]];
+            }
+
+            // Place cities for each player
+            for (const player of gameState.players) {
+                if (landTiles.length === 0) break;
+
+                const tile = landTiles.pop();
+
+                // Create a city for the player
+                foundCity({
+                    player: player.id,
+                    type: 'SETTLER' // Dummy unit type for compatibility
+                }, tile.x, tile.y);
+            }
+        }
+
+        // Render the map
+        function renderMap() {
+            const mapElement = document.getElementById('map');
+            mapElement.innerHTML = '';
+            
+            for (let y = 0; y < gameState.map.length; y++) {
+                for (let x = 0; x < gameState.map[y].length; x++) {
+                    const tile = gameState.map[y][x];
+                    const tileElement = document.createElement('div');
+                    tileElement.className = `tile ${tile.color}`;
+                    tileElement.dataset.x = x;
+                    tileElement.dataset.y = y;
+                    
+                    // Add click event for movement/selection
+                    tileElement.addEventListener('click', () => handleTileClick(x, y));
+                    
+                    // Highlight the selected unit's or city's tile
+                    if (
+                        (gameState.selectedUnit &&
+                            gameState.selectedUnit.x === x &&
+                            gameState.selectedUnit.y === y) ||
+                        (gameState.selectedCity &&
+                            gameState.selectedCity.x === x &&
+                            gameState.selectedCity.y === y)
+                    ) {
+                        tileElement.classList.add('selected-tile');
+                    }
+                    
+                    mapElement.appendChild(tileElement);
+                    
+                    // Add units and cities
+                    const playerUnit = findUnitAt(x, y);
+                    const playerCity = findCityAt(x, y);
+                    
+                    if (playerCity) {
+                        const cityElement = document.createElement('div');
+                        cityElement.className = `city ${gameState.players[playerCity.player].color}`;
+                        cityElement.textContent = playerCity.name[0];
+                        tileElement.appendChild(cityElement);
+                    }
+                    
+                    if (playerUnit) {
+                        const unitElement = document.createElement('div');
+                        unitElement.className = `unit ${gameState.players[playerUnit.player].color}`;
+                        unitElement.textContent = playerUnit.type[0];
+                        tileElement.appendChild(unitElement);
+                        
+                        if (playerUnit.player === gameState.currentPlayer && playerUnit.moves > 0) {
+                            unitElement.style.boxShadow = '0 0 0 2px white';
+                        }
+                    }
+                }
+            }
+        }
+
+        // Handle tile clicks
+        function handleTileClick(x, y) {
+            const currentPlayer = gameState.players[gameState.currentPlayer];
+
+            // Check if a city exists on the clicked tile
+            const city = findCityAt(x, y);
+            if (city && city.player === currentPlayer.id) {
+                // Select the city and show the city panel
+                gameState.selectedCity = city;
+                gameState.selectedUnit = null; // Deselect any selected unit
+                showCityPanel(city);
+                return; // Stop further processing
+            }
+
+            // Check if a unit exists on the clicked tile
+            const unit = findUnitAt(x, y);
+            if (unit && unit.player === currentPlayer.id) {
+                if (gameState.selectedUnit === unit) {
+                    // If the unit is already selected, allow setting a destination
+                } else {
+                    // Select the unit
+                    gameState.selectedUnit = unit;
+                    gameState.selectedCity = null; // Deselect any selected city
+                }
+            } else {
+                // Deselect everything if no valid selection
+                gameState.selectedUnit = null;
+                gameState.selectedCity = null;
+            }
+
+            renderMap();
+            updateUI();
+        }
+
+        // Check if a unit can move to a tile
+        function canMoveTo(unit, x, y, ignoreUnits = false) {
+            // Check if tile exists
+            if (y < 0 || y >= gameState.map.length || x < 0 || x >= gameState.map[0].length) {
+                return false;
+            }
+            
+            const tile = gameState.map[y][x];
+            const unitType = UNIT_TYPES[unit.type];
+            
+            // Naval movement rules
+            if (unitType.naval) {
+                // Galleys can only move on water tiles
+                return (tile.name === 'Ocean' || tile.name === 'Coast');
+            } else {
+                // Land units movement rules
+                if (tile.name === 'Ocean') return false;
+                if (tile.name === 'Coast') return (unit.type === 'SETTLER'); // Only settlers can cross coast
+                return true; // All other land tiles
+            }
+            
+            // For pathfinding, we don't care about move distance or other units
+            if (ignoreUnits) {
+                return true;
+            }
+            
+            // Check if tile is occupied by another unit
+            const otherUnit = findUnitAt(x, y);
+            if (otherUnit && otherUnit.player !== unit.player) {
+                return canAttack(unit, otherUnit);
+            } else if (otherUnit) {
+                return false; // Can't move onto friendly units
+            }
+            
+            return true;
+        }
+
+        // Check if a unit can attack another unit or a city
+        function canAttack(attacker, target) {
+            const attackerType = UNIT_TYPES[attacker.type];
+
+            if (target.health !== undefined) {
+                // Target is a city
+                return !attackerType.naval; // Only land units can attack cities
+            }
+
+            const defenderType = UNIT_TYPES[target.type];
+            if (attackerType.naval && !defenderType.naval) return false; // Naval units can only attack naval units
+
+            return true;
+        }
+
+        // Move a unit to a new position
+        function moveUnit(unit, x, y) {
+            const otherUnit = findUnitAt(x, y);
+            const city = findCityAt(x, y);
+
+            if (otherUnit && otherUnit.player !== unit.player) {
+                // Resolve combat with another unit
+                resolveCombat(unit, otherUnit);
+                return;
+            }
+
+            if (city && city.player !== unit.player) {
+                // Resolve combat with a city
+                resolveCombat(unit, city);
+                return;
+            }
+
+            // Regular movement
+            unit.x = x;
+            unit.y = y;
+            unit.moves -= 1;
+
+            if (unit.type === 'SETTLER' && !findCityAt(x, y)) {
+                const player = gameState.players[unit.player];
+                if (player.isHuman) {
+                    // Show city founding prompt immediately
+                    if (confirm(`Found a city at (${x}, ${y})?`)) {
+                        foundCity(unit, x, y);
+                        player.units = player.units.filter(u => u !== unit);
+                        delete gameState.unitDestinations[unit.id]; // Clear any destination
+                        renderMap();
+                        updateUI();
+                        return; // Stop further movement
+                    }
+                } else {
+                    // AI city founding (automatic)
+                    foundCity(unit, x, y);
+                    player.units = player.units.filter(u => u !== unit);
+                    delete gameState.unitDestinations[unit.id];
+                    return;
+                }
+            }
+
+            // Update destination path if exists
+            if (gameState.unitDestinations[unit.id]) {
+                const destination = gameState.unitDestinations[unit.id];
+
+                // Remove completed step from path
+                destination.path = destination.path.slice(1);
+
+                // Remove destination if reached or path empty
+                if ((unit.x === destination.targetX && unit.y === destination.targetY) ||
+                    destination.path.length === 0) {
+                    delete gameState.unitDestinations[unit.id];
+                }
+            }
+
+            renderMap();
+        }
+
+        function processQueuedMoves() {
+            const currentPlayer = gameState.players[gameState.currentPlayer];
+            if (!currentPlayer.isHuman) return;
+            
+            Object.keys(gameState.unitDestinations).forEach(unitId => {
+                const unit = currentPlayer.units.find(u => u.id === unitId);
+                if (!unit || unit.moves <= 0) return;
+                
+                const destination = gameState.unitDestinations[unitId];
+                
+                // Recalculate path in case obstacles appeared
+                const newPath = findPath(unit.x, unit.y, destination.targetX, destination.targetY, unit);
+                if (newPath.length === 0) {
+                    delete gameState.unitDestinations[unitId];
+                    return;
+                }
+                
+                const nextStep = newPath[0];
+                if (canMoveTo(unit, nextStep.x, nextStep.y)) {
+                    moveUnit(unit, nextStep.x, nextStep.y);
+                } else {
+                    delete gameState.unitDestinations[unitId];
+                }
+            });
+        }
+
+        // Resolve combat between a unit and another unit or a city
+        function resolveCombat(attacker, target) {
+            const attackerType = UNIT_TYPES[attacker.type];
+            const attackerPlayer = gameState.players[attacker.player];
+
+            if (target.health !== undefined) {
+                // Target is a city
+                const city = target;
+                const cityPlayer = gameState.players[city.player];
+
+                const attackerStrength = attackerType.strength * (1 + Math.random() * 0.2);
+                city.health -= attackerStrength;
+
+                logMessage(`${attackerPlayer.name} is attacking ${city.name}!`, attacker.player);
+
+                if (city.health <= 0) {
+                    logMessage(`${city.name} has been defeated!`, attacker.player);
+                    captureOrDestroyCity(attackerPlayer, cityPlayer, city);
+                }
+
+                return;
+            }
+
+            // Target is a unit
+            const defender = target;
+            const defenderType = UNIT_TYPES[defender.type];
+            const defenderPlayer = gameState.players[defender.player];
+
+            const attackerStrength = attackerType.strength * (1 + Math.random() * 0.2);
+            const defenderStrength = defenderType.strength * (1 + Math.random() * 0.2);
+
+            if (attackerStrength > defenderStrength) {
+                defenderPlayer.units = defenderPlayer.units.filter(u => u !== defender);
+
+                attacker.x = defender.x;
+                attacker.y = defender.y;
+                attacker.moves = 0;
+
+                defenderPlayer.relations[attacker.player].attitude = Math.max(0, defenderPlayer.relations[attacker.player].attitude - 20);
+            } else {
+                attackerPlayer.units = attackerPlayer.units.filter(u => u !== attacker);
+
+                attackerPlayer.relations[defender.player].attitude = Math.max(0, attackerPlayer.relations[defender.player].attitude - 10);
+            }
+
+            attackerPlayer.relations[defender.player].hasMet = true;
+            defenderPlayer.relations[attacker.player].hasMet = true;
+        }
+
+        function captureOrDestroyCity(attackerPlayer, cityPlayer, city) {
+            if (attackerPlayer.isHuman) {
+                const choice = confirm(`Do you want to capture ${city.name}? Click "OK" to capture or "Cancel" to destroy.`);
+
+                if (choice) {
+                    city.player = attackerPlayer.id;
+                    city.health = 100;
+                    city.population = Math.max(1, Math.floor(city.population / 2));
+                    attackerPlayer.cities.push(city);
+                    cityPlayer.cities = cityPlayer.cities.filter(c => c !== city);
+
+                    logMessage(`${attackerPlayer.name} has captured ${city.name}!`);
+                } else {
+                    cityPlayer.cities = cityPlayer.cities.filter(c => c !== city);
+                    logMessage(`${attackerPlayer.name} has destroyed ${city.name}!`);
+                }
+            } else {
+                const shouldCapture = Math.random() > 0.3;
+
+                if (shouldCapture) {
+                    city.player = attackerPlayer.id;
+                    city.health = 100;
+                    city.population = Math.max(1, Math.floor(city.population / 2));
+                    attackerPlayer.cities.push(city);
+                    cityPlayer.cities = cityPlayer.cities.filter(c => c !== city);
+
+                    logMessage(`${attackerPlayer.name} has captured ${city.name}!`, attackerPlayer.id);
+                } else {
+                    cityPlayer.cities = cityPlayer.cities.filter(c => c !== city);
+                    logMessage(`${attackerPlayer.name} has destroyed ${city.name}!`, attackerPlayer.id);
+                }
+            }
+
+            updateUI();
+            renderMap();
+        }
+
+        // Found a new city
+        function foundCity(unit, x, y) {
+            const player = gameState.players[unit.player];
+            const cityName = generateCityName(player);
+
+            const city = {
+                name: cityName,
+                x,
+                y,
+                player: player.id,
+                population: 1,
+                production: 0,
+                currentProduction: null,
+                buildings: [],
+                health: 100, // Add health to cities
+                food: calculateCityFood(x, y) // Calculate initial food production
+            };
+
+            player.cities.push(city);
+
+            // Remove the settler if it exists (only relevant during gameplay)
+            if (unit.type === 'SETTLER') {
+                player.units = player.units.filter(u => u !== unit);
+            }
+
+            // Update UI
+            updateUI();
+        }
+
+        function calculateUnitCap(player) {
+            const unitsPerCity = 5; // Each city allows 5 units
+            return player.cities.length * unitsPerCity;
+        }
+
+        // Calculate food production for a city based on surrounding tiles
+        function calculateCityFood(x, y) {
+            let food = 0;
+            const directions = [
+                { dx: 0, dy: -1 }, { dx: 1, dy: 0 },
+                { dx: 0, dy: 1 }, { dx: -1, dy: 0 },
+                { dx: -1, dy: -1 }, { dx: 1, dy: -1 },
+                { dx: -1, dy: 1 }, { dx: 1, dy: 1 }
+            ];
+
+            for (const dir of directions) {
+                const nx = x + dir.dx;
+                const ny = y + dir.dy;
+
+                if (ny >= 0 && ny < gameState.map.length && nx >= 0 && nx < gameState.map[0].length) {
+                    const tile = gameState.map[ny][nx];
+                    food += tile.food || 0; // Add food from the tile
+                }
+            }
+
+            return food;
+        }
+
+        // Generate a city name based on player
+        function generateCityName(player) {
+            const prefixes = {
+                0: ['New', 'Fort', 'Port', 'San', 'Los'],
+                1: ['Roma', 'Ven', 'Flor', 'Gen', 'Pis'],
+                2: ['Athe', 'Spar', 'Cor', 'Del', 'Thes'],
+                3: ['Mem', 'Alex', 'Theb', 'Cai', 'Giz']
+            };
+            
+            const suffixes = {
+                0: ['ville', 'burg', 'ton', ' City', ' Springs'],
+                1: ['a', 'ice', 'enza', 'ona', 'ento'],
+                2: ['ns', 'ta', 'os', 'ia', 'alon'],
+                3: ['phis', 'andria', 'es', 'ro', 'ah']
+            };
+            
+            const prefixList = prefixes[player.id] || prefixes[0];
+            const suffixList = suffixes[player.id] || suffixes[0];
+            
+            const prefix = prefixList[Math.floor(Math.random() * prefixList.length)];
+            const suffix = suffixList[Math.floor(Math.random() * suffixList.length)];
+            
+            return prefix + suffix;
+        }
+
+        // Find unit at coordinates
+        function findUnitAt(x, y) {
+            for (const player of gameState.players) {
+                const unit = player.units.find(u => u.x === x && u.y === y);
+                if (unit) return unit;
+            }
+            return null;
+        }
+
+        // Find city at coordinates
+        function findCityAt(x, y) {
+            for (const player of gameState.players) {
+                const city = player.cities.find(c => c.x === x && c.y === y);
+                if (city) return city;
+            }
+            return null;
+        }
+
+        // End the current player's turn
+        function endTurn() {
+            const currentPlayer = gameState.players[gameState.currentPlayer];
+            processQueuedMoves();
+
+            if (currentPlayer.isHuman) {
+                const activeDestinations = Object.entries(gameState.unitDestinations);
+
+                for (const [key, destination] of activeDestinations) {
+                    const [x, y] = key.split(',').map(Number);
+                    const unit = findUnitAt(x, y);
+
+                    if (unit && unit.moves > 0) {
+                        let path = destination.path;
+
+                        // Recalculate path only if it's empty or invalid
+                        if (!path || path.length === 0 || !isPathValid(path, unit)) {
+                            path = findPath(unit.x, unit.y, destination.targetX, destination.targetY, unit);
+                            destination.path = path;
+                        }
+
+                        if (path.length > 0) {
+                            const nextStep = path[0];
+                            if (canMoveTo(unit, nextStep.x, nextStep.y)) {
+                                moveUnit(unit, nextStep.x, nextStep.y);
+                                destination.path = path.slice(1); // Remove the first step
+                            } else {
+                                delete gameState.unitDestinations[key];
+                            }
+                        } else {
+                            delete gameState.unitDestinations[key];
+                        }
+                    }
+                }
+            }
+
+            // Process cities and research for current player
+            processPlayerTurn(currentPlayer);
+
+            // Move to next player
+            let nextPlayerIndex = (gameState.currentPlayer + 1) % gameState.players.length;
+
+            // Process all AI turns automatically
+            while (nextPlayerIndex !== 0) {
+                gameState.currentPlayer = nextPlayerIndex;
+                const nextPlayer = gameState.players[gameState.currentPlayer];
+
+                if (!nextPlayer.isHuman) {
+                    aiTurn(nextPlayer);
+                    processPlayerTurn(nextPlayer);
+                }
+
+                nextPlayerIndex = (gameState.currentPlayer + 1) % gameState.players.length;
+                if (nextPlayerIndex === 0) {
+                    gameState.turn++;
+                }
+            }
+
+            // Return to human player
+            gameState.currentPlayer = 0;
+
+            // Reset human player's unit moves
+            const humanPlayer = gameState.players[0];
+            for (const unit of humanPlayer.units) {
+                unit.moves = UNIT_TYPES[unit.type].move;
+            }
+
+            renderMap();
+            updateUI();
+        }
+
+        function isPathValid(path, unit) {
+            for (const step of path) {
+                if (!canMoveTo(unit, step.x, step.y, true)) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        function processPlayerTurn(player) {
+            let totalFood = 0;
+            let totalFoodConsumption = 0;
+
+            // Calculate total food production from cities
+            for (const city of player.cities) {
+                totalFood += city.food;
+            }
+
+            // Calculate total food consumption from units
+            for (const unit of player.units) {
+                totalFoodConsumption += UNIT_TYPES[unit.type].foodConsumption;
+            }
+
+            // Check for food shortages
+            if (totalFood < totalFoodConsumption) {
+                logMessage(`${player.name} has a food shortage!`);
+                const foodDeficit = totalFoodConsumption - totalFood;
+
+                // Remove units to balance food deficit
+                for (let i = 0; i < foodDeficit; i++) {
+                    if (player.units.length > 0) {
+                        const weakestUnit = player.units.reduce((weakest, unit) =>
+                            UNIT_TYPES[unit.type].strength < UNIT_TYPES[weakest.type].strength ? unit : weakest
+                        );
+                        logMessage(`${player.name} loses a ${weakestUnit.type} due to starvation!`);
+                        player.units = player.units.filter(u => u !== weakestUnit);
+                    }
+                }
+            }
+
+            // Process cities
+            const unitCap = calculateUnitCap(player);
+            for (const city of player.cities) {
+                if (city.currentProduction) {
+                    if (player.units.length >= unitCap) {
+                        city.currentProduction = null; // Cancel production
+                        continue;
+                    }
+
+                    city.production += 2;
+                    const unitType = UNIT_TYPES[city.currentProduction];
+                    if (unitType && city.production >= unitType.cost) {
+                        const unit = {
+                            id: `unit-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, // Unique ID
+                            type: city.currentProduction,
+                            x: city.x,
+                            y: city.y,
+                            moves: UNIT_TYPES[city.currentProduction].move,
+                            player: player.id
+                        };
+
+                        // Try to place the unit on an adjacent tile
+                        const directions = [
+                            { dx: 0, dy: -1 }, { dx: 1, dy: 0 },
+                            { dx: 0, dy: 1 }, { dx: -1, dy: 0 }
+                        ];
+                        let placed = false;
+                        for (const dir of directions) {
+                            const nx = city.x + dir.dx;
+                            const ny = city.y + dir.dy;
+                            if (canMoveTo(unit, nx, ny, true) && !findUnitAt(nx, ny)) {
+                                unit.x = nx;
+                                unit.y = ny;
+                                placed = true;
+                                break;
+                            }
+                        }
+
+                        // If no adjacent tile is available, leave the unit on the city tile
+                        player.units.push(unit);
+                        city.production = 0;
+                        city.currentProduction = null;
+                    }
+                }
+                player.gold += city.population;
+            }
+
+            // Process research
+            if (player.currentResearch) {
+                player.research += 2;
+                const tech = TECH_TREE[player.currentResearch];
+                if (player.research >= tech.cost) {
+                    player.researchedTechs.add(player.currentResearch);
+                    player.research = 0;
+                    player.currentResearch = null;
+                }
+            }
+
+            // Reset unit moves (for AI)
+            if (!player.isHuman) {
+                for (const unit of player.units) {
+                    unit.moves = UNIT_TYPES[unit.type].move;
+                }
+            }
+        }
+
+        function findPath(startX, startY, targetX, targetY, unit) {
+            const openSet = [{ x: startX, y: startY, g: 0, h: heuristic(startX, startY, targetX, targetY), path: [] }];
+            const visited = new Set();
+            visited.add(`${startX},${startY}`);
+
+            while (openSet.length > 0) {
+                // Sort by f = g + h
+                openSet.sort((a, b) => (a.g + a.h) - (b.g + b.h));
+                const current = openSet.shift();
+
+                if (current.x === targetX && current.y === targetY) {
+                    return current.path;
+                }
+
+                const directions = [
+                    { dx: 0, dy: -1 }, { dx: 1, dy: 0 },
+                    { dx: 0, dy: 1 }, { dx: -1, dy: 0 }
+                ];
+
+                for (const dir of directions) {
+                    const nx = current.x + dir.dx;
+                    const ny = current.y + dir.dy;
+
+                    if (!visited.has(`${nx},${ny}`) && canMoveTo(unit, nx, ny, true)) {
+                        visited.add(`${nx},${ny}`);
+                        openSet.push({
+                            x: nx,
+                            y: ny,
+                            g: current.g + 1,
+                            h: heuristic(nx, ny, targetX, targetY),
+                            path: [...current.path, { x: nx, y: ny }]
+                        });
+                    }
+                }
+            }
+
+            return [];
+        }
+
+        // Heuristic function for A* (Manhattan distance)
+        function heuristic(x1, y1, x2, y2) {
+            return Math.abs(x1 - x2) + Math.abs(y1 - y2);
+        }
+
+        // Right-click handler for setting destination
+        function handleTileRightClick(x, y) {
+            if (gameState.selectedCity) {
+                return; // Do nothing if a city is selected
+            }
+
+            if (gameState.selectedUnit && gameState.selectedUnit.player === gameState.currentPlayer) {
+                const path = findPath(gameState.selectedUnit.x, gameState.selectedUnit.y, x, y, gameState.selectedUnit);
+
+                if (path.length > 0) {
+                    // Store destination by unit ID
+                    gameState.unitDestinations[gameState.selectedUnit.id] = {
+                        targetX: x,
+                        targetY: y,
+                        path: path
+                    };
+
+                    // Move first step if possible
+                    if (gameState.selectedUnit.moves > 0) {
+                        const nextStep = path[0];
+                        if (canMoveTo(gameState.selectedUnit, nextStep.x, nextStep.y)) {
+                            moveUnit(gameState.selectedUnit, nextStep.x, nextStep.y);
+                        }
+                    }
+
+                    renderMap();
+                    updateUI();
+                }
+            }
+        }
+
+        // AI player turn
+        function aiTurn(aiPlayer) {
+
+            let totalFood = 0;
+            let totalFoodConsumption = 0;
+
+            // Calculate total food production and consumption
+            for (const city of aiPlayer.cities) {
+                totalFood += city.food;
+            }
+            for (const unit of aiPlayer.units) {
+                totalFoodConsumption += UNIT_TYPES[unit.type].foodConsumption;
+            }
+
+            // Avoid producing units if food is low or unit cap is reached
+            const unitCap = calculateUnitCap(aiPlayer);
+            const canProduceUnits = totalFood > totalFoodConsumption && aiPlayer.units.length < unitCap;
+
+            // Process city production
+            for (const city of aiPlayer.cities) {
+                if (!city.currentProduction) {
+                    const options = [];
+
+                    // Build settlers if unit cap is reached
+                    if (aiPlayer.units.length >= unitCap && Math.random() > 0.5) {
+                        options.push('SETTLER');
+                    }
+
+                    // Build military units if relations are hostile or cities are under threat
+                    const isUnderThreat = isCityUnderThreat(city, aiPlayer);
+                    if (canProduceUnits && (isUnderThreat || Math.random() > 0.5)) {
+                        options.push('WARRIOR');
+                        if (aiPlayer.researchedTechs.has('ARCHERY')) options.push('ARCHER');
+                        if (aiPlayer.researchedTechs.has('BRONZE_WORKING')) options.push('SPEARMAN');
+                    }
+
+                    if (options.length > 0) {
+                        city.currentProduction = options[Math.floor(Math.random() * options.length)];
+                    }
+                }
+            }
+
+            // 2. Process research
+            if (!aiPlayer.currentResearch) {
+                const availableTechs = Object.keys(TECH_TREE).filter(tech =>
+                    !aiPlayer.researchedTechs.has(tech)
+                );
+                if (availableTechs.length > 0) {
+                    aiPlayer.currentResearch = prioritizeResearch(aiPlayer, availableTechs);
+                }
+            }
+
+            // 3. Move units with purpose
+            for (const unit of aiPlayer.units) {
+                if (unit.moves > 0) {
+                    // Try to find something to attack
+                    let target = findNearestTarget(unit, aiPlayer);
+
+                    if (target) {
+                        // Move toward target
+                        const path = findPath(unit.x, unit.y, target.x, target.y, unit);
+                        if (path.length > 0) {
+                            const nextStep = path[0];
+                            moveUnit(unit, nextStep.x, nextStep.y);
+                            continue;
+                        }
+                    }
+
+                    // No target found - explore or defend
+                    if (Math.random() > 0.5) {
+                        // Explore
+                        const directions = [
+                            { dx: 0, dy: -1 }, { dx: 1, dy: 0 },
+                            { dx: 0, dy: 1 }, { dx: -1, dy: 0 }
+                        ];
+                        directions.sort(() => Math.random() - 0.5);
+
+                        for (const dir of directions) {
+                            const nx = unit.x + dir.dx;
+                            const ny = unit.y + dir.dy;
+                            if (canMoveTo(unit, nx, ny)) {
+                                moveUnit(unit, nx, ny);
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Helper function to check if a city is under threat
+        function isCityUnderThreat(city, aiPlayer) {
+            for (const player of gameState.players) {
+                if (player.id !== aiPlayer.id) {
+                    for (const unit of player.units) {
+                        const distance = Math.abs(unit.x - city.x) + Math.abs(unit.y - city.y);
+                        if (distance <= 2) {
+                            return true; // Enemy unit is near the city
+                        }
+                    }
+                }
+            }
+            return false;
+        }
+
+        // Helper function to prioritize research
+        function prioritizeResearch(aiPlayer, availableTechs) {
+            // Example: Prioritize military techs if relations are hostile
+            const hostileRelations = Object.values(aiPlayer.relations).some(rel => rel.attitude < 40);
+            if (hostileRelations) {
+                const militaryTechs = availableTechs.filter(tech =>
+                    ['ARCHERY', 'BRONZE_WORKING'].includes(tech)
+                );
+                if (militaryTechs.length > 0) {
+                    return militaryTechs[Math.floor(Math.random() * militaryTechs.length)];
+                }
+            }
+
+            // Otherwise, prioritize expansion or economy
+            const expansionTechs = availableTechs.filter(tech =>
+                ['POTTERY', 'WRITING'].includes(tech)
+            );
+            if (expansionTechs.length > 0) {
+                return expansionTechs[Math.floor(Math.random() * expansionTechs.length)];
+            }
+
+            // Default to random tech
+            return availableTechs[Math.floor(Math.random() * availableTechs.length)];
+        }
+
+        // Helper function to find the nearest target
+        function findNearestTarget(unit, aiPlayer) {
+            let closestTarget = null;
+            let closestDistance = Infinity;
+
+            for (const player of gameState.players) {
+                if (player.id !== aiPlayer.id && aiPlayer.relations[player.id].hasMet) {
+                    // Check units
+                    for (const enemyUnit of player.units) {
+                        const dist = Math.abs(unit.x - enemyUnit.x) + Math.abs(unit.y - enemyUnit.y);
+                        if (dist < closestDistance && canAttack(unit, enemyUnit)) {
+                            closestDistance = dist;
+                            closestTarget = enemyUnit;
+                        }
+                    }
+
+                    // Check cities
+                    for (const enemyCity of player.cities) {
+                        const dist = Math.abs(unit.x - enemyCity.x) + Math.abs(unit.y - enemyCity.y);
+                        if (dist < closestDistance) {
+                            closestDistance = dist;
+                            closestTarget = enemyCity;
+                        }
+                    }
+                }
+            }
+
+            return closestTarget;
+        }
+
+        // Update the UI
+        function updateUI() {
+            const currentPlayer = gameState.players[gameState.currentPlayer];
+            
+            // Update turn and resources
+            document.getElementById('turn-counter').textContent = gameState.turn;
+            document.getElementById('gold-counter').textContent = currentPlayer.gold;
+            document.getElementById('research-counter').textContent = currentPlayer.research;
+            
+            if (currentPlayer.currentResearch) {
+                const tech = TECH_TREE[currentPlayer.currentResearch];
+                document.getElementById('research-needed').textContent = tech.cost;
+                document.getElementById('current-tech').textContent = tech.name;
+            } else {
+                document.getElementById('research-needed').textContent = '0';
+                document.getElementById('current-tech').textContent = 'None';
+            }
+            
+            // Update diplomacy panel if open
+            if (document.getElementById('diplomacy-panel').style.display === 'block') {
+                showDiplomacy();
+            }
+
+            if (gameState.selectedCity) {
+                showCityPanel(gameState.selectedCity);
+            }
+        }
+
+        // Show diplomacy panel
+        function showDiplomacy() {
+            const currentPlayer = gameState.players[gameState.currentPlayer];
+            const relationsContainer = document.getElementById('relations-container');
+            relationsContainer.innerHTML = '';
+            
+            for (const player of gameState.players) {
+                if (player.id !== currentPlayer.id) {
+                    const relation = currentPlayer.relations[player.id];
+                    
+                    if (relation.hasMet) {
+                        const relationElement = document.createElement('div');
+                        relationElement.innerHTML = `
+                            <h4>${player.name}</h4>
+                            <div class="relation-bar">
+                                <div class="relation-fill" style="width: ${relation.attitude}%"></div>
+                                <div class="relation-text">${getRelationText(relation.attitude)} (${relation.attitude})</div>
+                            </div>
+                        `;
+                        relationsContainer.appendChild(relationElement);
+                    } else {
+                        const relationElement = document.createElement('div');
+                        relationElement.innerHTML = `<h4>${player.name}</h4><p>You have not met this civilization yet.</p>`;
+                        relationsContainer.appendChild(relationElement);
+                    }
+                }
+            }
+            
+            document.getElementById('diplomacy-panel').style.display = 'block';
+        }
+
+        // Get relation text based on attitude
+        function getRelationText(attitude) {
+            if (attitude >= 80) return 'Allied';
+            if (attitude >= 60) return 'Friendly';
+            if (attitude >= 40) return 'Neutral';
+            if (attitude >= 20) return 'Unfriendly';
+            return 'Hostile';
+        }
+
+        // Hide diplomacy panel
+        function hideDiplomacy() {
+            document.getElementById('diplomacy-panel').style.display = 'none';
+        }
+
+        // Show technology tree
+        function showTechTree() {
+            const currentPlayer = gameState.players[gameState.currentPlayer];
+            const techTreeElement = document.getElementById('tech-tree');
+            techTreeElement.innerHTML = '';
+            
+            for (const [techId, tech] of Object.entries(TECH_TREE)) {
+                const techElement = document.createElement('div');
+                techElement.className = 'tech-item';
+                
+                if (currentPlayer.researchedTechs.has(techId)) {
+                    techElement.classList.add('researched');
+                } else if (canResearchTech(currentPlayer, techId)) {
+                    techElement.classList.add('available');
+                    techElement.addEventListener('click', () => selectTech(techId));
+                }
+                
+                techElement.innerHTML = `
+                    <strong>${tech.name}</strong> (${tech.cost})<br>
+                    <small>${tech.description}</small>
+                `;
+                
+                techTreeElement.appendChild(techElement);
+            }
+            
+            document.getElementById('tech-panel').style.display = 'block';
+        }
+
+        // Check if a player can research a tech
+        function canResearchTech(player, techId) {
+            if (player.researchedTechs.has(techId)) return false;
+            
+            const tech = TECH_TREE[techId];
+            // Check if any prerequisite techs are researched
+            for (const [otherTechId, otherTech] of Object.entries(TECH_TREE)) {
+                if (otherTech.leadsTo && otherTech.leadsTo.includes(techId)) {
+                    if (player.researchedTechs.has(otherTechId)) return true;
+                }
+            }
+            
+            // Also allow techs with no prerequisites (like starting techs)
+            const hasPrereq = Object.values(TECH_TREE).some(t => t.leadsTo && t.leadsTo.includes(techId));
+            return !hasPrereq;
+        }
+
+        // Select a tech to research
+        function selectTech(techId) {
+            const currentPlayer = gameState.players[gameState.currentPlayer];
+            currentPlayer.currentResearch = techId;
+            currentPlayer.research = 0;
+            hideTechTree();
+            updateUI();
+        }
+
+        // Hide technology tree
+        function hideTechTree() {
+            document.getElementById('tech-panel').style.display = 'none';
+        }
+
+        // Show city management panel
+        function showCityPanel(city) {
+            const cityInfoElement = document.getElementById('city-info');
+            const cityProductionElement = document.getElementById('city-production');
+            const player = gameState.players[city.player];
+            
+            cityInfoElement.innerHTML = `
+                <h4>${city.name}</h4>
+                <p>Population: ${city.population}</p>
+                <p>Production: ${city.production}/${city.currentProduction ? UNIT_TYPES[city.currentProduction].cost : '0'}</p>
+            `;
+            
+            cityProductionElement.innerHTML = '<h5>Production:</h5>';
+            
+            // Show available units to produce
+            for (const [unitType, unitDef] of Object.entries(UNIT_TYPES)) {
+                if (!unitDef.production.includes('CITY')) continue; // Only show units that cities can produce
+                
+                // Check tech requirements
+                if (!unitDef.requires || player.researchedTechs.has(unitDef.requires)) {
+                    const unitElement = document.createElement('div');
+                    unitElement.className = 'tech-item';
+                    if (city.currentProduction === unitType) unitElement.classList.add('researched');
+                    unitElement.textContent = `${unitDef.name} (${unitDef.cost})`;
+                    unitElement.addEventListener('click', () => {
+                        city.currentProduction = unitType;
+                        city.production = 0;
+                        showCityPanel(city); // Refresh the panel
+                    });
+                    cityProductionElement.appendChild(unitElement);
+                }
+            }
+            
+            document.getElementById('city-panel').style.display = 'block';
+        }
+
+        // Hide city panel
+        function hideCityPanel() {
+            document.getElementById('city-panel').style.display = 'none';
+            gameState.selectedCity = null;
+        }
+
+        // Initialize the game when the page loads
+        window.onload = initGame;
+    </script>
+</body>
+</html>
