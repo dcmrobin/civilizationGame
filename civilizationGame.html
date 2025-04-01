@@ -938,7 +938,7 @@
             const attackerStrength = attackerType.strength * (1 + Math.random() * 0.2);
             const defenderStrength = defenderType.strength * (1 + Math.random() * 0.2);
 
-            if (attackerStrength > defenderStrength && attackerType != SETTLER) {
+            if (attackerStrength > defenderStrength && attackerType != UNIT_TYPES.SETTLER) {
                 defenderPlayer.units = defenderPlayer.units.filter(u => u !== defender);
 
                 attacker.x = defender.x;
@@ -1264,7 +1264,7 @@
 
                     // Skip tiles that already have cities
                     if (!findCityAt(nx, ny)) {
-                        score += (tile.food || 0) + (tile.production || 0) + (tile.gold * 2.5 /* prioritize gold */ || 0);
+                        score += (tile.food || 0) + (tile.production || 0) + (tile.gold * 3 /* prioritize gold */ || 0);
                     }
                 }
             }
@@ -1516,6 +1516,12 @@
                     // Check if the unit can move to the tile
                     if (!canMoveTo(unit, nx, ny, true)) continue;
 
+                    // Skip tiles with cities unless it's the target
+                    if (findCityAt(nx, ny) && (nx !== targetX || ny !== targetY)) continue;
+
+                    // Skip tiles with units unless it's the target
+                    if (findUnitAt(nx, ny) && (nx !== targetX || ny !== targetY)) continue;
+
                     const tile = gameState.map[ny][nx];
                     const moveCost = tile.moveCost || 1; // Default moveCost to 1 if not defined
 
@@ -1625,7 +1631,7 @@
                         // Settler logic: Find a valid tile to found a city
                         const validTile = expansionOpportunities.find(opportunity =>
                             Math.abs(unit.x - opportunity.x) + Math.abs(unit.y - opportunity.y) <= 1 &&
-                            opportunity.score >= 22 // Minimum score threshold for founding a city
+                            opportunity.score >= 20 // Minimum score threshold for founding a city
                         );
 
                         if (validTile) {
