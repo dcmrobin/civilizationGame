@@ -156,6 +156,37 @@
             <div id="log-content" style="height: 100px; overflow-y: auto;"></div>
         </div>
 
+        <div id="help-panel" style="display: none; width: 800px; padding: 10px; background-color: #eee; border: 1px solid #999; margin-bottom: 10px;">
+            <h3>Game Instructions</h3>
+            <div id="help-content">
+                <h4>Game Objective</h4>
+                <p>Expand your civilization by founding cities, researching technologies, and managing resources. Defeat your enemies or achieve technological superiority to win the game.</p>
+        
+                <h4>Basic Controls</h4>
+                <ul>
+                    <li><strong>End Turn:</strong> Click the "End Turn" button to finish your turn and let other players (AI) take their turns.</li>
+                    <li><strong>Diplomacy:</strong> Click the "Diplomacy" button to view your relations with other civilizations and propose trades.</li>
+                    <li><strong>Technology:</strong> Click the "Technology" button to research new technologies.</li>
+                </ul>
+        
+                <h4>Moving Units</h4>
+                <p>Select a unit by clicking on it. Then, right-click on a tile to set a destination. The unit will move toward the destination if it has enough moves.</p>
+        
+                <h4>Combat</h4>
+                <p>Move your units next to enemy units or cities to attack them. Units can only attack once per turn.</p>
+        
+                <h4>Diplomacy</h4>
+                <p>Use the Diplomacy panel to view your relations with other civilizations. You can propose trades to improve relations or gain resources.</p>
+        
+                <h4>City Management</h4>
+                <p>Click on one of your cities to manage it. You can assign production tasks, such as building units or researching technologies.</p>
+        
+                <h4>Research</h4>
+                <p>Click the "Technology" button to open the Technology Tree. Select a technology to start researching it. Researching technologies unlocks new units and buildings.</p>
+            </div>
+            <button id="close-help">Close</button>
+        </div>
+
         <div id="info-panel">
             <div>Turn: <span id="turn-counter">1</span></div>
             <div>Gold: <span id="gold-counter">50</span></div>
@@ -165,6 +196,7 @@
             <button id="end-turn-btn">End Turn</button>
             <button id="diplomacy-btn">Diplomacy</button>
             <button id="tech-btn">Technology</button>
+            <button id="help-btn">Help</button>
         </div>
         <div id="map"></div>
         
@@ -274,6 +306,16 @@
             }
         };
 
+        // Show the Help Panel
+        function showHelp() {
+            document.getElementById('help-panel').style.display = 'block';
+        }
+
+        // Hide the Help Panel
+        function hideHelp() {
+            document.getElementById('help-panel').style.display = 'none';
+        }
+
         // Initialize the game
         function initGame() {
             createMap();
@@ -289,6 +331,8 @@
             document.getElementById('close-diplomacy').addEventListener('click', hideDiplomacy);
             document.getElementById('close-tech').addEventListener('click', hideTechTree);
             document.getElementById('close-city').addEventListener('click', hideCityPanel);
+            document.getElementById('help-btn').addEventListener('click', showHelp);
+            document.getElementById('close-help').addEventListener('click', hideHelp);
             document.getElementById('map').addEventListener('contextmenu', (e) => {
                 e.preventDefault();
                 const tile = e.target.closest('.tile');
