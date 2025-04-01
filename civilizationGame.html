@@ -165,7 +165,6 @@
             <button id="end-turn-btn">End Turn</button>
             <button id="diplomacy-btn">Diplomacy</button>
             <button id="tech-btn">Technology</button>
-            <button id="new-game-btn">New Game</button>
         </div>
         <div id="map"></div>
         
@@ -202,11 +201,11 @@
         };
 
         const UNIT_TYPES = {
-            SETTLER: { name: 'Settler', cost: 30, strength: 0, move: 1, production: ['CITY'], foodConsumption: 2 },
-            WARRIOR: { name: 'Warrior', cost: 10, strength: 20, move: 1, production: ['CITY'], foodConsumption: 1 },
-            ARCHER: { name: 'Archer', cost: 20, strength: 10, move: 1, production: ['CITY'], requires: 'ARCHERY', foodConsumption: 1 },//need range combat mechanic
-            SPEARMAN: { name: 'Spearman', cost: 20, strength: 30, move: 1, production: ['CITY'], requires: 'BRONZE_WORKING', foodConsumption: 1 },
-            GALLEY: { name: 'Galley', cost: 30, strength: 10, move: 3, production: ['PORT'], naval: true, foodConsumption: 2 }
+            SETTLER: { name: 'Settler', cost: 30, goldCost: 100, strength: 0, move: 1, production: ['CITY'], foodConsumption: 2 },
+            WARRIOR: { name: 'Warrior', cost: 10, goldCost: 50, strength: 20, move: 1, production: ['CITY'], foodConsumption: 1 },
+            ARCHER: { name: 'Archer', cost: 20, goldCost: 75, strength: 10, move: 1, production: ['CITY'], requires: 'ARCHERY', foodConsumption: 1 },
+            SPEARMAN: { name: 'Spearman', cost: 20, goldCost: 75, strength: 30, move: 1, production: ['CITY'], requires: 'BRONZE_WORKING', foodConsumption: 1 },
+            GALLEY: { name: 'Galley', cost: 30, goldCost: 150, strength: 10, move: 3, production: ['PORT'], naval: true, foodConsumption: 2 }
         };
 
         const TECH_TREE = {
@@ -287,7 +286,6 @@
             document.getElementById('end-turn-btn').addEventListener('click', endTurn);
             document.getElementById('diplomacy-btn').addEventListener('click', showDiplomacy);
             document.getElementById('tech-btn').addEventListener('click', showTechTree);
-            document.getElementById('new-game-btn').addEventListener('click', initGame);
             document.getElementById('close-diplomacy').addEventListener('click', hideDiplomacy);
             document.getElementById('close-tech').addEventListener('click', hideTechTree);
             document.getElementById('close-city').addEventListener('click', hideCityPanel);
@@ -303,14 +301,22 @@
             });
         }
 
-        function logMessage(message, playerId = null) {
+        function logMessage(message, playerId = null, otherPlayerId = null) {
             const currentPlayer = gameState.players[gameState.currentPlayer];
 
             // Filter messages about other players
             if (playerId !== null && playerId !== currentPlayer.id) {
-                const relation = currentPlayer.relations[playerId];
-                if (!relation || !relation.hasMet) {
-                    return; // Skip logging if the player hasn't met the other player
+                const relationWithPlayer = currentPlayer.relations[playerId];
+                if (!relationWithPlayer || !relationWithPlayer.hasMet) {
+                    return; // Skip logging if the player hasn't met the first player
+                }
+            }
+
+            // If the message involves two players (e.g., AI-to-AI interaction), ensure the human player has met both
+            if (otherPlayerId !== null && otherPlayerId !== currentPlayer.id) {
+                const relationWithOtherPlayer = currentPlayer.relations[otherPlayerId];
+                if (!relationWithOtherPlayer || !relationWithOtherPlayer.hasMet) {
+                    return; // Skip logging if the player hasn't met the second player
                 }
             }
 
@@ -773,7 +779,7 @@
                 const attackerStrength = attackerType.strength * (1 + Math.random() * 0.2);
                 city.health -= attackerStrength;
 
-                logMessage(`${attackerPlayer.name} is attacking ${city.name}!`, attacker.player);
+                logMessage(`${attackerPlayer.name} is attacking ${city.name}!`, attacker.player, city.player);
 
                 // Ensure relations exist before modifying them
                 if (!attackerPlayer.relations[cityPlayer.id]) {
@@ -791,7 +797,7 @@
                 //logMessage(`${attackerPlayer.name} and ${cityPlayer.name}'s relations have worsened!`, null);
 
                 if (city.health <= 0) {
-                    logMessage(`${city.name} has been defeated!`, attacker.player);
+                    logMessage(`${city.name} has been defeated!`, attacker.player, city.player);
                     captureOrDestroyCity(attackerPlayer, cityPlayer, city);
                 }
 
@@ -826,7 +832,7 @@
                 attackerPlayer.relations[defender.player].attitude = Math.max(0, attackerPlayer.relations[defender.player].attitude - 10);
 
                 // Log reputation change
-                logMessage(`${attackerPlayer.name} and ${defenderPlayer.name}'s relations have worsened!`, null);
+                logMessage(`${attackerPlayer.name} and ${defenderPlayer.name}'s relations have worsened!`, attacker.player, defender.player);
             } else {
                 attackerPlayer.units = attackerPlayer.units.filter(u => u !== attacker);
 
@@ -843,7 +849,7 @@
                 defenderPlayer.relations[attacker.player].attitude = Math.max(0, defenderPlayer.relations[attacker.player].attitude - 10);
 
                 // Log reputation change
-                logMessage(`${attackerPlayer.name} and ${defenderPlayer.name}'s relations have worsened!`, null);
+                logMessage(`${attackerPlayer.name} and ${defenderPlayer.name}'s relations have worsened!`, attacker.player, defender.player);
             }
 
             attackerPlayer.relations[defender.player].hasMet = true;
@@ -861,10 +867,10 @@
                     attackerPlayer.cities.push(city);
                     cityPlayer.cities = cityPlayer.cities.filter(c => c !== city);
 
-                    logMessage(`${attackerPlayer.name} has captured ${city.name}!`);
+                    logMessage(`${attackerPlayer.name} has captured ${city.name}!`, attackerPlayer.id, cityPlayer.id);
                 } else {
                     cityPlayer.cities = cityPlayer.cities.filter(c => c !== city);
-                    logMessage(`${attackerPlayer.name} has destroyed ${city.name}!`);
+                    logMessage(`${attackerPlayer.name} has destroyed ${city.name}!`, attackerPlayer.id, cityPlayer.id);
                 }
             } else {
                 const shouldCapture = Math.random() > 0.3;
@@ -876,10 +882,10 @@
                     attackerPlayer.cities.push(city);
                     cityPlayer.cities = cityPlayer.cities.filter(c => c !== city);
 
-                    logMessage(`${attackerPlayer.name} has captured ${city.name}!`, attackerPlayer.id);
+                    logMessage(`${attackerPlayer.name} has captured ${city.name}!`, attackerPlayer.id, cityPlayer.id);
                 } else {
                     cityPlayer.cities = cityPlayer.cities.filter(c => c !== city);
-                    logMessage(`${attackerPlayer.name} has destroyed ${city.name}!`, attackerPlayer.id);
+                    logMessage(`${attackerPlayer.name} has destroyed ${city.name}!`, attackerPlayer.id, cityPlayer.id);
                 }
             }
 
@@ -987,6 +993,44 @@
             return null;
         }
 
+        function aiTradeWithPlayer(aiPlayer) {
+            const humanPlayer = gameState.players[0];
+            const relation = aiPlayer.relations[humanPlayer.id];
+
+            // Check if cities are close enough for trade
+            const tradeDistance = 5; // Maximum distance for trade
+            const canTrade = aiPlayer.cities.some(aiCity =>
+                humanPlayer.cities.some(humanCity =>
+                    Math.abs(aiCity.x - humanCity.x) + Math.abs(aiCity.y - humanCity.y) <= tradeDistance
+                )
+            );
+
+            if (!canTrade) return; // Skip trade if cities are too far apart
+
+            // Only offer trades if relations are good and trade cooldown has passed
+            if (relation.attitude >= 40 && Math.random() > 0.9) { // Reduce trade frequency (10% chance)
+                const goldOffered = Math.floor(Math.random() * 20) + 10; // Random gold amount
+                const reputationBoost = Math.floor(Math.random() * 5) + 5; // Random reputation boost
+
+                // Show trade offer to the player
+                const acceptTrade = confirm(`${aiPlayer.name} offers you ${goldOffered} gold in exchange for improving relations by ${reputationBoost} points. Do you accept?`);
+
+                // Set hasMet to true for both players
+                aiPlayer.relations[humanPlayer.id].hasMet = true;
+                humanPlayer.relations[aiPlayer.id].hasMet = true;
+
+                if (acceptTrade) {
+                    humanPlayer.gold += goldOffered;
+                    aiPlayer.relations[humanPlayer.id].attitude = Math.min(100, relation.attitude + reputationBoost);
+                    humanPlayer.relations[aiPlayer.id].attitude = Math.min(100, humanPlayer.relations[aiPlayer.id].attitude + reputationBoost);
+
+                    logMessage(`${humanPlayer.name} accepted a trade with ${aiPlayer.name}. Relations improved!`, aiPlayer.id, humanPlayer.id);
+                } else {
+                    logMessage(`${humanPlayer.name} rejected a trade offer from ${aiPlayer.name}.`, aiPlayer.id, humanPlayer.id);
+                }
+            }
+        }
+
         // End the current player's turn
         function endTurn() {
             // Disable the "End Turn" button
@@ -1067,7 +1111,7 @@
 
             // Check for food shortages
             if (totalFood < totalFoodConsumption) {
-                logMessage(`${player.name} has a food shortage!`);
+                logMessage(`${player.name} has a food shortage!`, player.id);
                 const foodDeficit = totalFoodConsumption - totalFood;
 
                 // Remove units to balance food deficit
@@ -1076,22 +1120,16 @@
                         const weakestUnit = player.units.reduce((weakest, unit) =>
                             UNIT_TYPES[unit.type].strength < UNIT_TYPES[weakest.type].strength ? unit : weakest
                         );
-                        logMessage(`${player.name} loses a ${weakestUnit.type} due to starvation!`);
+                        logMessage(`${player.name} loses a ${weakestUnit.type} due to starvation!`, player.id);
                         player.units = player.units.filter(u => u !== weakestUnit);
                     }
                 }
             }
 
             // Process cities
-            const unitCap = calculateUnitCap(player);
             for (const city of player.cities) {
                 if (city.currentProduction) {
-                    if (player.units.length >= unitCap) {
-                        city.currentProduction = null; // Cancel production
-                        continue;
-                    }
-
-                    city.production += 2;
+                    city.production += 2; // Add production points
                     const unitType = UNIT_TYPES[city.currentProduction];
                     if (unitType && city.production >= unitType.cost) {
                         const unit = {
@@ -1124,9 +1162,11 @@
                         player.units.push(unit);
                         city.production = 0;
                         city.currentProduction = null;
+
+                        logMessage(`${player.name} completed production of a ${unitType.name} in ${city.name}.`, player.id);
                     }
                 }
-                player.gold += city.population;
+                player.gold += city.population; // Cities generate gold based on population
             }
 
             // Process research
@@ -1265,7 +1305,15 @@
                 }
             }
 
-            // 4. Move units
+            // 4. AI-to-Human Trading
+            if (!aiPlayer.isHuman) {
+                aiTradeWithPlayer(aiPlayer);
+            }
+
+            // 5. AI-to-AI Trading
+            aiTradeWithOtherAIs(aiPlayer);
+
+            // 6. Move units
             for (const unit of aiPlayer.units) {
                 if (unit.moves > 0) {
                     const target = findBestTarget(unit, aiPlayer, threats, expansionOpportunities);
@@ -1280,6 +1328,42 @@
                     } else {
                         // Explore if no target is found
                         explore(unit, aiPlayer);
+                    }
+                }
+            }
+        }
+
+        function aiTradeWithOtherAIs(aiPlayer) {
+            for (const otherAI of gameState.players) {
+                if (otherAI.id !== aiPlayer.id && !otherAI.isHuman) {
+                    const relation = aiPlayer.relations[otherAI.id];
+
+                    // Check if cities are close enough for trade
+                    const tradeDistance = 5; // Maximum distance for trade
+                    const canTrade = aiPlayer.cities.some(aiCity =>
+                        otherAI.cities.some(otherCity =>
+                            Math.abs(aiCity.x - otherCity.x) + Math.abs(aiCity.y - otherCity.y) <= tradeDistance
+                        )
+                    );
+
+                    if (!canTrade) continue; // Skip trade if cities are too far apart
+
+                    // Only offer trades if relations are good
+                    if (relation.attitude >= 40 && Math.random() > 0.8) { // Reduce trade frequency (20% chance)
+                        const goldOffered = Math.floor(Math.random() * 20) + 10; // Random gold amount
+                        const reputationBoost = Math.floor(Math.random() * 5) + 5; // Random reputation boost
+
+                        // Set hasMet to true for both players
+                        aiPlayer.relations[otherAI.id].hasMet = true;
+                        otherAI.relations[aiPlayer.id].hasMet = true;
+
+                        // Execute the trade
+                        aiPlayer.gold -= goldOffered;
+                        otherAI.gold += goldOffered;
+                        aiPlayer.relations[otherAI.id].attitude = Math.min(100, relation.attitude + reputationBoost);
+                        otherAI.relations[aiPlayer.id].attitude = Math.min(100, otherAI.relations[aiPlayer.id].attitude + reputationBoost);
+
+                        logMessage(`${aiPlayer.name} traded ${goldOffered} gold with ${otherAI.name}. Relations improved!`, aiPlayer.id, otherAI.id);
                     }
                 }
             }
@@ -1530,6 +1614,7 @@
                                 <div class="relation-fill" style="width: ${relation.attitude}%"></div>
                                 <div class="relation-text">${getRelationText(relation.attitude)} (${relation.attitude})</div>
                             </div>
+                            <button onclick="proposeTrade(${player.id})">Propose Trade</button>
                         `;
                         relationsContainer.appendChild(relationElement);
                     } else {
@@ -1541,6 +1626,52 @@
             }
             
             document.getElementById('diplomacy-panel').style.display = 'block';
+        }
+
+        function proposeTrade(aiPlayerId) {
+            const humanPlayer = gameState.players[0];
+            const aiPlayer = gameState.players[aiPlayerId];
+            const relation = humanPlayer.relations[aiPlayerId];
+
+            // Check if cities are close enough for trade
+            const tradeDistance = 5; // Maximum distance for trade
+            const canTrade = humanPlayer.cities.some(humanCity =>
+                aiPlayer.cities.some(aiCity =>
+                    Math.abs(humanCity.x - aiCity.x) + Math.abs(humanCity.y - aiCity.y) <= tradeDistance
+                )
+            );
+
+            if (!canTrade) {
+                alert("Your cities are too far apart to trade with this civilization.");
+                return;
+            }
+
+            // Propose a trade
+            const goldOffered = Math.floor(Math.random() * 20) + 10; // Random gold amount
+            const reputationBoost = Math.floor(Math.random() * 5) + 5; // Random reputation boost
+
+            const acceptTrade = confirm(`Propose a trade to ${aiPlayer.name}: Offer ${goldOffered} gold in exchange for improving relations by ${reputationBoost} points?`);
+
+            // Set hasMet to true for both players
+            humanPlayer.relations[aiPlayerId].hasMet = true;
+            aiPlayer.relations[humanPlayer.id].hasMet = true;
+
+            if (acceptTrade) {
+                if (humanPlayer.gold >= goldOffered) {
+                    humanPlayer.gold -= goldOffered;
+                    aiPlayer.gold += goldOffered;
+                    humanPlayer.relations[aiPlayerId].attitude = Math.min(100, relation.attitude + reputationBoost);
+                    aiPlayer.relations[humanPlayer.id].attitude = Math.min(100, aiPlayer.relations[humanPlayer.id].attitude + reputationBoost);
+
+                    logMessage(`${humanPlayer.name} successfully traded with ${aiPlayer.name}. Relations improved!`, aiPlayerId, humanPlayer.id);
+                } else {
+                    alert("You don't have enough gold to propose this trade.");
+                }
+            } else {
+                logMessage(`${humanPlayer.name} canceled the trade proposal with ${aiPlayer.name}.`, aiPlayerId, humanPlayer.id);
+            }
+
+            updateUI();
         }
 
         // Get relation text based on attitude
@@ -1621,35 +1752,75 @@
             const cityInfoElement = document.getElementById('city-info');
             const cityProductionElement = document.getElementById('city-production');
             const player = gameState.players[city.player];
-            
+
             cityInfoElement.innerHTML = `
                 <h4>${city.name}</h4>
                 <p>Population: ${city.population}</p>
                 <p>Production: ${city.production}/${city.currentProduction ? UNIT_TYPES[city.currentProduction].cost : '0'}</p>
             `;
-            
+
             cityProductionElement.innerHTML = '<h5>Production:</h5>';
-            
+
             // Show available units to produce
             for (const [unitType, unitDef] of Object.entries(UNIT_TYPES)) {
                 if (!unitDef.production.includes('CITY')) continue; // Only show units that cities can produce
-                
+
                 // Check tech requirements
                 if (!unitDef.requires || player.researchedTechs.has(unitDef.requires)) {
                     const unitElement = document.createElement('div');
                     unitElement.className = 'tech-item';
                     if (city.currentProduction === unitType) unitElement.classList.add('researched');
-                    unitElement.textContent = `${unitDef.name} (${unitDef.cost})`;
-                    unitElement.addEventListener('click', () => {
-                        city.currentProduction = unitType;
-                        city.production = 0;
-                        showCityPanel(city); // Refresh the panel
-                    });
+                    unitElement.innerHTML = `
+                        ${unitDef.name} (${unitDef.cost} production, ${unitDef.goldCost} gold)
+                        <button onclick="startUnitProduction('${unitType}', ${city.x}, ${city.y})">Start Production</button>
+                    `;
                     cityProductionElement.appendChild(unitElement);
                 }
             }
-            
+
             document.getElementById('city-panel').style.display = 'block';
+        }
+
+        function startUnitProduction(unitType, x, y) {
+            const player = gameState.players[gameState.currentPlayer];
+            const city = findCityAt(x, y);
+            const unitDef = UNIT_TYPES[unitType];
+
+            if (player.gold >= unitDef.goldCost) {
+                player.gold -= unitDef.goldCost;
+                city.currentProduction = unitType;
+                city.production = 0;
+
+                logMessage(`${player.name} started production of a ${unitDef.name} in ${city.name} for ${unitDef.goldCost} gold.`, player.id);
+                updateUI();
+            } else {
+                alert("Not enough gold to start production!");
+            }
+        }
+
+        function buyUnitWithGold(unitType, x, y) {
+            const player = gameState.players[gameState.currentPlayer];
+            const unitDef = UNIT_TYPES[unitType];
+
+            if (player.gold >= unitDef.goldCost) {
+                player.gold -= unitDef.goldCost;
+
+                const unit = {
+                    id: `unit-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, // Unique ID
+                    type: unitType,
+                    x,
+                    y,
+                    moves: unitDef.move,
+                    player: player.id
+                };
+
+                player.units.push(unit);
+                logMessage(`${player.name} bought a ${unitDef.name} for ${unitDef.goldCost} gold!`, player.id);
+                updateUI();
+                renderMap();
+            } else {
+                alert("Not enough gold to buy this unit!");
+            }
         }
 
         // Hide city panel
