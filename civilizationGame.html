@@ -257,7 +257,7 @@
             PLAINS: { name: 'Plains', moveCost: 1, food: 1, production: 0, color: 'plains' },
             DESERT: { name: 'Desert', moveCost: 2, food: 0, production: 0, color: 'desert' },
             MOUNTAINS: { name: 'Mountains', moveCost: 3, food: 0, production: 1, color: 'mountains' },// make this have a gold boost
-            SNOW: { name: 'Snow', moveCost: 3, food: 0, production: -1, color: 'snow' },
+            SNOW: { name: 'Snow', moveCost: 4, food: 0, production: -1, color: 'snow' },
             FOREST: { name: 'Forest', moveCost: 2, food: 1, production: 1, color: 'forest' }
         };
 
@@ -824,7 +824,7 @@
 
             // Check if the unit is already in progress of moving to a tile
             if (unit.remainingMoves > 0) {
-                logMessage(`${gameState.players[unit.player].name}'s ${unit.type} is still moving to (${unit.targetX}, ${unit.targetY}). ${unit.remainingMoves} turns remaining.`, unit.player);
+                //logMessage(`${gameState.players[unit.player].name}'s ${unit.type} is still moving to (${unit.targetX}, ${unit.targetY}). ${unit.remainingMoves} turns remaining.`, unit.player);
                 return;
             }
 
@@ -835,7 +835,7 @@
                 unit.moves = 0; // Use up all movement points for this turn
                 unit.targetX = x; // Store the target tile
                 unit.targetY = y;
-                logMessage(`${gameState.players[unit.player].name}'s ${unit.type} is moving to (${x}, ${y}). ${unit.remainingMoves} turns remaining.`, unit.player);
+                //logMessage(`${gameState.players[unit.player].name}'s ${unit.type} is moving to (${x}, ${y}). ${unit.remainingMoves} turns remaining.`, unit.player);
                 return;
             }
 
@@ -843,7 +843,7 @@
             unit.x = x;
             unit.y = y;
             unit.moves -= tile.moveCost; // Deduct movement points based on tile's moveCost
-            logMessage(`${gameState.players[unit.player].name}'s ${unit.type} moved to (${x}, ${y}).`, unit.player);
+            //logMessage(`${gameState.players[unit.player].name}'s ${unit.type} moved to (${x}, ${y}).`, unit.player);
 
             renderMap();
         }
@@ -1403,41 +1403,60 @@
         }
 
         function findPath(startX, startY, targetX, targetY, unit) {
-            const openSet = [{ x: startX, y: startY, g: 0, h: heuristic(startX, startY, targetX, targetY), path: [] }];
+            const openSet = [
+                {
+                    x: startX,
+                    y: startY,
+                    g: 0, // Cost from start to current node
+                    h: heuristic(startX, startY, targetX, targetY), // Heuristic cost to target
+                    path: [] // Path taken to reach this node
+                }
+            ];
             const visited = new Set();
             visited.add(`${startX},${startY}`);
 
             while (openSet.length > 0) {
-                // Sort by f = g + h
+                // Sort by f = g + h (total cost)
                 openSet.sort((a, b) => (a.g + a.h) - (b.g + b.h));
                 const current = openSet.shift();
 
+                // If the target is reached, return the path
                 if (current.x === targetX && current.y === targetY) {
                     return current.path;
                 }
 
                 const directions = [
-                    { dx: 0, dy: -1 }, { dx: 1, dy: 0 },
-                    { dx: 0, dy: 1 }, { dx: -1, dy: 0 }
+                    { dx: 0, dy: -1 }, // Up
+                    { dx: 1, dy: 0 },  // Right
+                    { dx: 0, dy: 1 },  // Down
+                    { dx: -1, dy: 0 }  // Left
                 ];
 
                 for (const dir of directions) {
                     const nx = current.x + dir.dx;
                     const ny = current.y + dir.dy;
 
-                    if (!visited.has(`${nx},${ny}`) && canMoveTo(unit, nx, ny, true)) {
-                        visited.add(`${nx},${ny}`);
-                        openSet.push({
-                            x: nx,
-                            y: ny,
-                            g: current.g + 1,
-                            h: heuristic(nx, ny, targetX, targetY),
-                            path: [...current.path, { x: nx, y: ny }]
-                        });
-                    }
+                    // Skip already visited tiles
+                    if (visited.has(`${nx},${ny}`)) continue;
+
+                    // Check if the unit can move to the tile
+                    if (!canMoveTo(unit, nx, ny, true)) continue;
+
+                    const tile = gameState.map[ny][nx];
+                    const moveCost = tile.moveCost || 1; // Default moveCost to 1 if not defined
+
+                    visited.add(`${nx},${ny}`);
+                    openSet.push({
+                        x: nx,
+                        y: ny,
+                        g: current.g + moveCost, // Add the moveCost of the tile
+                        h: heuristic(nx, ny, targetX, targetY), // Heuristic cost to target
+                        path: [...current.path, { x: nx, y: ny }] // Append the current step to the path
+                    });
                 }
             }
 
+            // Return an empty path if no valid path is found
             return [];
         }
 
