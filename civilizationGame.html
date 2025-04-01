@@ -774,51 +774,6 @@
             return true;
         }
 
-        // Move a unit to a new position
-        /*function moveUnit(unit, x, y) {
-            const tile = gameState.map[y][x];
-
-            // Check if the unit has enough movement points
-            if (unit.moves < tile.moveCost) {
-                logMessage(`${gameState.players[unit.player].name}'s ${unit.type} cannot move to (${x}, ${y}) due to insufficient movement points.`, unit.player);
-                return;
-            }
-
-            const otherUnit = findUnitAt(x, y);
-            const city = findCityAt(x, y);
-
-            if (otherUnit && otherUnit.player !== unit.player) {
-                // Resolve combat with another unit
-                resolveCombat(unit, otherUnit);
-                return;
-            }
-
-            if (city && city.player !== unit.player) {
-                const unitPlayer = gameState.players[unit.player];
-                const cityPlayer = gameState.players[city.player];
-
-                // Check reputation before attacking the city
-                const relation = unitPlayer.relations[cityPlayer.id];
-                if (relation && relation.attitude >= 40) {
-                    logMessage(`${unitPlayer.name}'s ${unit.type} avoided attacking ${city.name} due to good relations.`, unit.player, city.player);
-                    return;
-                }
-
-                // If relations are hostile, attack the city
-                resolveCombat(unit, city);
-                return;
-            }
-
-            // Regular movement
-            unit.x = x;
-            unit.y = y;
-            unit.moves -= tile.moveCost; // Deduct movement points based on tile's moveCost
-
-            renderMap();
-        }*/
-
-        // ^ old movement logic that has attacking in it ^
-
         function moveUnit(unit, x, y) {
             const tile = gameState.map[y][x];
 
@@ -836,6 +791,32 @@
                 unit.targetX = x; // Store the target tile
                 unit.targetY = y;
                 //logMessage(`${gameState.players[unit.player].name}'s ${unit.type} is moving to (${x}, ${y}). ${unit.remainingMoves} turns remaining.`, unit.player);
+                return;
+            }
+
+            // Check for combat with another unit
+            const otherUnit = findUnitAt(x, y);
+            if (otherUnit && otherUnit.player !== unit.player) {
+                // Resolve combat with the other unit
+                resolveCombat(unit, otherUnit);
+                return;
+            }
+
+            // Check for combat with a city
+            const city = findCityAt(x, y);
+            if (city && city.player !== unit.player) {
+                const unitPlayer = gameState.players[unit.player];
+                const cityPlayer = gameState.players[city.player];
+
+                // Check reputation before attacking the city
+                const relation = unitPlayer.relations[cityPlayer.id];
+                if (relation && relation.attitude >= 40) {
+                    logMessage(`${unitPlayer.name}'s ${unit.type} avoided attacking ${city.name} due to good relations.`, unit.player, city.player);
+                    return;
+                }
+
+                // If relations are hostile, attack the city
+                resolveCombat(unit, city);
                 return;
             }
 
