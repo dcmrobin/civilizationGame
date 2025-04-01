@@ -1619,15 +1619,43 @@
                 }
             }
 
-            // 3. AI-to-Human Trading
+            // 3. Research prioritization
+            if (aiPlayer.currentResearch) {
+                // Progress research
+                aiPlayer.research += 2; // AI research rate (adjust as needed)
+                const tech = TECH_TREE[aiPlayer.currentResearch];
+                if (aiPlayer.research >= tech.cost) {
+                    aiPlayer.researchedTechs.add(aiPlayer.currentResearch);
+                    logMessage(`${aiPlayer.name} completed research on ${tech.name}.`, aiPlayer.id);
+                    aiPlayer.currentResearch = null; // Clear current research
+                    aiPlayer.research = 0; // Reset research progress
+                }
+            }
+
+            // Start new research if no current research
+            if (!aiPlayer.currentResearch) {
+                // Get available technologies
+                const availableTechs = Object.keys(TECH_TREE).filter(techId =>
+                    canResearchTech(aiPlayer, techId)
+                );
+
+                // Randomize research selection
+                if (availableTechs.length > 0) {
+                    aiPlayer.currentResearch = prioritizeResearch(aiPlayer, availableTechs);
+                    aiPlayer.research = 0; // Reset research progress
+                    logMessage(`${aiPlayer.name} started researching ${TECH_TREE[aiPlayer.currentResearch].name}.`, aiPlayer.id);
+                }
+            }
+
+            // 4. AI-to-Human Trading
             if (!aiPlayer.isHuman) {
                 aiTradeWithPlayer(aiPlayer);
             }
 
-            // 4. AI-to-AI Trading
+            // 5. AI-to-AI Trading
             aiTradeWithOtherAIs(aiPlayer);
 
-            // 5. Move units
+            // 6. Move units
             for (const unit of aiPlayer.units) {
                 if (unit.moves > 0) {
                     if (unit.type === 'SETTLER') {
@@ -1854,31 +1882,6 @@
                     break;
                 }
             }
-        }
-
-        // Prioritize research based on AI strategy
-        function prioritizeResearch(aiPlayer, availableTechs) {
-            // Example: Prioritize military techs if relations are hostile
-            const hostileRelations = Object.values(aiPlayer.relations).some(rel => rel.attitude < 40);
-            if (hostileRelations) {
-                const militaryTechs = availableTechs.filter(tech =>
-                    ['ARCHERY', 'BRONZE_WORKING'].includes(tech)
-                );
-                if (militaryTechs.length > 0) {
-                    return militaryTechs[Math.floor(Math.random() * militaryTechs.length)];
-                }
-            }
-
-            // Otherwise, prioritize expansion or economy
-            const expansionTechs = availableTechs.filter(tech =>
-                ['POTTERY', 'WRITING'].includes(tech)
-            );
-            if (expansionTechs.length > 0) {
-                return expansionTechs[Math.floor(Math.random() * expansionTechs.length)];
-            }
-
-            // Default to random tech
-            return availableTechs[Math.floor(Math.random() * availableTechs.length)];
         }
 
         // Helper function to prioritize research
