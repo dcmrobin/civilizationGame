@@ -702,6 +702,20 @@
             // Check if a unit exists on the clicked tile
             const unit = findUnitAt(x, y);
             if (unit && unit.player === currentPlayer.id) {
+                if (unit.type === 'SETTLER') {
+                    // Allow the settler to found a city
+                    const tile = gameState.map[y][x];
+                    if (tile.name !== 'Ocean' && tile.name !== 'Coast' && !findCityAt(x, y)) {
+                        const confirmCity = confirm("Do you want to found a city here?");
+                        if (confirmCity) {
+                            foundCity(unit, x, y);
+                            return;
+                        }
+                    } else {
+                        alert("You cannot found a city here!");
+                    }
+                }
+
                 if (gameState.selectedUnit === unit) {
                     // If the unit is already selected, allow setting a destination
                 } else {
@@ -923,7 +937,7 @@
             const attackerStrength = attackerType.strength * (1 + Math.random() * 0.2);
             const defenderStrength = defenderType.strength * (1 + Math.random() * 0.2);
 
-            if (attackerStrength > defenderStrength) {
+            if (attackerStrength > defenderStrength && attackerType != SETTLER) {
                 defenderPlayer.units = defenderPlayer.units.filter(u => u !== defender);
 
                 attacker.x = defender.x;
@@ -1046,13 +1060,14 @@
 
             player.cities.push(city);
 
-            // Remove the settler if it exists (only relevant during gameplay)
-            if (unit.type === 'SETTLER') {
-                player.units = player.units.filter(u => u !== unit);
-            }
+            // Remove the settler
+            player.units = player.units.filter(u => u !== unit);
+
+            logMessage(`${player.name} founded the city of ${city.name}!`, player.id);
 
             // Update UI
             updateUI();
+            renderMap();
         }
 
         function calculateUnitCap(player) {
@@ -1358,7 +1373,7 @@
                     }
                     if (city.production < 0) {
                         city.production = 0; // Ensure production doesn't go negative
-                        logMessage("${player.name}'s city ${city.name} has no production available.", player.id);
+                        //logMessage("${player.name}'s city ${city.name} has no production available.", player.id);
                     }
                     const unitType = UNIT_TYPES[city.currentProduction];
                     if (unitType && city.production >= unitType.cost) {
@@ -1395,7 +1410,7 @@
                         city.production = 0;
                         city.currentProduction = null;
 
-                        logMessage(`${player.name} completed production of a ${unitType.name} in ${city.name}.`, player.id);
+                        //logMessage(`${player.name} completed production of a ${unitType.name} in ${city.name}.`, player.id);
                     }
                 }
             }
@@ -1513,7 +1528,6 @@
             }
         }
 
-        // AI player turn
         function aiTurn(aiPlayer) {
             // 1. Assess the current situation
             const threats = assessThreats(aiPlayer);
@@ -1550,46 +1564,42 @@
                         aiPlayer.gold -= unitDef.goldCost; // Deduct gold
                         city.currentProduction = selectedUnit;
                         city.production = 0;
-
-                        //logMessage(`${aiPlayer.name} started production of a ${unitDef.name} in ${city.name} for ${unitDef.goldCost} gold.`, aiPlayer.id);
-                    } else {
-                        //logMessage(`${aiPlayer.name} does not have enough gold to produce a ${unitDef.name} in ${city.name}.`, aiPlayer.id);
                     }
                 }
             }
 
-            // 3. Process research
-            if (!aiPlayer.currentResearch) {
-                const availableTechs = Object.keys(TECH_TREE).filter(tech =>
-                    !aiPlayer.researchedTechs.has(tech)
-                );
-                if (availableTechs.length > 0) {
-                    aiPlayer.currentResearch = prioritizeResearch(aiPlayer, availableTechs);
-                }
-            }
-
-            // 4. AI-to-Human Trading
+            // 3. AI-to-Human Trading
             if (!aiPlayer.isHuman) {
                 aiTradeWithPlayer(aiPlayer);
             }
 
-            // 5. AI-to-AI Trading
+            // 4. AI-to-AI Trading
             aiTradeWithOtherAIs(aiPlayer);
 
-            // 6. Move units
+            // 5. Move units
             for (const unit of aiPlayer.units) {
                 if (unit.moves > 0) {
-                    const target = findBestTarget(unit, aiPlayer, threats, expansionOpportunities);
+                    if (unit.type === 'SETTLER') {
+                        // Settler logic: Find a valid tile to found a city
+                        const validTile = expansionOpportunities.find(opportunity =>
+                            Math.abs(unit.x - opportunity.x) + Math.abs(unit.y - opportunity.y) <= 1
+                        );
 
+                        if (validTile) {
+                            foundCity(unit, validTile.x, validTile.y);
+                            continue;
+                        }
+                    }
+
+                    // Default movement logic for other units
+                    const target = findBestTarget(unit, aiPlayer, threats, expansionOpportunities);
                     if (target) {
-                        // Move toward the target
                         const path = findPath(unit.x, unit.y, target.x, target.y, unit);
                         if (path.length > 0) {
                             const nextStep = path[0];
                             moveUnit(unit, nextStep.x, nextStep.y);
                         }
                     } else {
-                        // Explore if no target is found
                         explore(unit, aiPlayer);
                     }
                 }
@@ -2090,7 +2100,7 @@
                 city.currentProduction = unitType;
                 city.production = 0;
 
-                logMessage(`${player.name} started production of a ${unitDef.name} in ${city.name} for ${unitDef.goldCost} gold.`, player.id);
+                //logMessage(`${player.name} started production of a ${unitDef.name} in ${city.name} for ${unitDef.goldCost} gold.`, player.id);
                 updateUI();
             } else {
                 alert("Not enough gold to start production!");
