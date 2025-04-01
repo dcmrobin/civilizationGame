@@ -203,10 +203,10 @@
 
         const UNIT_TYPES = {
             SETTLER: { name: 'Settler', cost: 30, strength: 0, move: 1, production: ['CITY'], foodConsumption: 2 },
-            WARRIOR: { name: 'Warrior', cost: 10, strength: 2, move: 1, production: ['CITY'], foodConsumption: 1 },
-            ARCHER: { name: 'Archer', cost: 20, strength: 1, move: 2, production: ['CITY'], requires: 'ARCHERY', foodConsumption: 1 },//need range combat mechanic
-            SPEARMAN: { name: 'Spearman', cost: 20, strength: 3, move: 1, production: ['CITY'], requires: 'BRONZE_WORKING', foodConsumption: 1 },
-            GALLEY: { name: 'Galley', cost: 30, strength: 1, move: 3, production: ['PORT'], naval: true, foodConsumption: 2 }
+            WARRIOR: { name: 'Warrior', cost: 10, strength: 20, move: 1, production: ['CITY'], foodConsumption: 1 },
+            ARCHER: { name: 'Archer', cost: 20, strength: 10, move: 1, production: ['CITY'], requires: 'ARCHERY', foodConsumption: 1 },//need range combat mechanic
+            SPEARMAN: { name: 'Spearman', cost: 20, strength: 30, move: 1, production: ['CITY'], requires: 'BRONZE_WORKING', foodConsumption: 1 },
+            GALLEY: { name: 'Galley', cost: 30, strength: 10, move: 3, production: ['PORT'], naval: true, foodConsumption: 2 }
         };
 
         const TECH_TREE = {
