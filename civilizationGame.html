@@ -692,7 +692,18 @@
             }
 
             if (city && city.player !== unit.player) {
-                // Resolve combat with a city
+                const unitPlayer = gameState.players[unit.player];
+                const cityPlayer = gameState.players[city.player];
+
+                // Check reputation before attacking the city
+                const relation = unitPlayer.relations[cityPlayer.id];
+                if (relation && relation.attitude >= 40) {
+                    // If relations are neutral or better, avoid attacking
+                    logMessage(`${unitPlayer.name}'s ${unit.type} avoided attacking ${city.name} due to good relations.`, unit.player, city.player);
+                    return;
+                }
+
+                // If relations are hostile, attack the city
                 resolveCombat(unit, city);
                 return;
             }
@@ -793,8 +804,17 @@
                 attackerPlayer.relations[cityPlayer.id].attitude = Math.max(0, attackerPlayer.relations[cityPlayer.id].attitude - 10);
                 cityPlayer.relations[attackerPlayer.id].attitude = Math.max(0, cityPlayer.relations[attackerPlayer.id].attitude - 10);
 
-                // Log reputation change
-                //logMessage(`${attackerPlayer.name} and ${cityPlayer.name}'s relations have worsened!`, null);
+                // Check for allies of the defender
+                for (const ally of gameState.players) {
+                    if (ally.id !== cityPlayer.id && ally.relations[cityPlayer.id]?.attitude >= 80) {
+                        // Ally becomes hostile toward the attacker
+                        ally.relations[attacker.player] = ally.relations[attacker.player] || { attitude: 50, hasMet: true };
+                        ally.relations[attacker.player].attitude = Math.max(0, ally.relations[attacker.player].attitude - 40);
+
+                        // Log the alliance response
+                        logMessage(`${ally.name} has come to the aid of ${cityPlayer.name} and is now hostile toward ${attackerPlayer.name}!`, ally.id, attacker.player);
+                    }
+                }
 
                 if (city.health <= 0) {
                     logMessage(`${city.name} has been defeated!`, attacker.player, city.player);
@@ -831,8 +851,17 @@
                 defenderPlayer.relations[attacker.player].attitude = Math.max(0, defenderPlayer.relations[attacker.player].attitude - 10);
                 attackerPlayer.relations[defender.player].attitude = Math.max(0, attackerPlayer.relations[defender.player].attitude - 10);
 
-                // Log reputation change
-                logMessage(`${attackerPlayer.name} and ${defenderPlayer.name}'s relations have worsened!`, attacker.player, defender.player);
+                // Check for allies of the defender
+                for (const ally of gameState.players) {
+                    if (ally.id !== defenderPlayer.id && ally.relations[defenderPlayer.id]?.attitude >= 80) {
+                        // Ally becomes hostile toward the attacker
+                        ally.relations[attacker.player] = ally.relations[attacker.player] || { attitude: 50, hasMet: true };
+                        ally.relations[attacker.player].attitude = Math.max(0, ally.relations[attacker.player].attitude - 40);
+
+                        // Log the alliance response
+                        logMessage(`${ally.name} has come to the aid of ${defenderPlayer.name} and is now hostile toward ${attackerPlayer.name}!`, ally.id, attacker.player);
+                    }
+                }
             } else {
                 attackerPlayer.units = attackerPlayer.units.filter(u => u !== attacker);
 
@@ -848,8 +877,17 @@
                 attackerPlayer.relations[defender.player].attitude = Math.max(0, attackerPlayer.relations[defender.player].attitude - 10);
                 defenderPlayer.relations[attacker.player].attitude = Math.max(0, defenderPlayer.relations[attacker.player].attitude - 10);
 
-                // Log reputation change
-                logMessage(`${attackerPlayer.name} and ${defenderPlayer.name}'s relations have worsened!`, attacker.player, defender.player);
+                // Check for allies of the defender
+                for (const ally of gameState.players) {
+                    if (ally.id !== defenderPlayer.id && ally.relations[defenderPlayer.id]?.attitude >= 80) {
+                        // Ally becomes hostile toward the attacker
+                        ally.relations[attacker.player] = ally.relations[attacker.player] || { attitude: 50, hasMet: true };
+                        ally.relations[attacker.player].attitude = Math.max(0, ally.relations[attacker.player].attitude - 40);
+
+                        // Log the alliance response
+                        logMessage(`${ally.name} has come to the aid of ${defenderPlayer.name} and is now hostile toward ${attackerPlayer.name}!`, ally.id, attacker.player);
+                    }
+                }
             }
 
             attackerPlayer.relations[defender.player].hasMet = true;
@@ -1007,27 +1045,34 @@
 
             if (!canTrade) return; // Skip trade if cities are too far apart
 
-            // Only offer trades if relations are good and trade cooldown has passed
-            if (relation.attitude >= 40 && Math.random() > 0.9) { // Reduce trade frequency (10% chance)
-                const goldOffered = Math.floor(Math.random() * 20) + 10; // Random gold amount
-                const reputationBoost = Math.floor(Math.random() * 5) + 5; // Random reputation boost
+            // Ensure AI has enough gold to trade
+            const goldOffered = Math.floor(Math.random() * 20) + 10; // Random gold amount
+            if (aiPlayer.gold < goldOffered) return; // Skip trade if AI doesn't have enough gold
 
-                // Show trade offer to the player
-                const acceptTrade = confirm(`${aiPlayer.name} offers you ${goldOffered} gold in exchange for improving relations by ${reputationBoost} points. Do you accept?`);
+            // Calculate trade probability based on reputation
+            const tradeChance = relation.attitude / 100; // Higher attitude increases the chance
+            if (Math.random() > tradeChance) return; // Skip trade if the random chance fails
 
-                // Set hasMet to true for both players
-                aiPlayer.relations[humanPlayer.id].hasMet = true;
-                humanPlayer.relations[aiPlayer.id].hasMet = true;
+            const reputationBoost = Math.floor(Math.random() * 5) + 5; // Random reputation boost
 
-                if (acceptTrade) {
-                    humanPlayer.gold += goldOffered;
-                    aiPlayer.relations[humanPlayer.id].attitude = Math.min(100, relation.attitude + reputationBoost);
-                    humanPlayer.relations[aiPlayer.id].attitude = Math.min(100, humanPlayer.relations[aiPlayer.id].attitude + reputationBoost);
+            // Show trade offer to the human player
+            const acceptTrade = confirm(`${aiPlayer.name} offers you ${goldOffered} gold in exchange for improving relations by ${reputationBoost} points. Do you accept?`);
 
-                    logMessage(`${humanPlayer.name} accepted a trade with ${aiPlayer.name}. Relations improved!`, aiPlayer.id, humanPlayer.id);
-                } else {
-                    logMessage(`${humanPlayer.name} rejected a trade offer from ${aiPlayer.name}.`, aiPlayer.id, humanPlayer.id);
-                }
+            // Set hasMet to true for both players
+            aiPlayer.relations[humanPlayer.id].hasMet = true;
+            humanPlayer.relations[aiPlayer.id].hasMet = true;
+
+            if (acceptTrade) {
+                humanPlayer.gold += goldOffered;
+                aiPlayer.gold -= goldOffered;
+                aiPlayer.relations[humanPlayer.id].attitude = Math.min(100, relation.attitude + reputationBoost);
+                humanPlayer.relations[aiPlayer.id].attitude = Math.min(100, humanPlayer.relations[aiPlayer.id].attitude + reputationBoost);
+
+                logMessage(`${humanPlayer.name} accepted a trade with ${aiPlayer.name}. Relations improved!`, aiPlayer.id, humanPlayer.id);
+            } else {
+                logMessage(`${humanPlayer.name} declined a trade offer from ${aiPlayer.name}.`, aiPlayer.id, humanPlayer.id);
+                aiPlayer.relations[humanPlayer.id].attitude = Math.min(100, relation.attitude - 10);
+                humanPlayer.relations[aiPlayer.id].attitude = Math.min(100, humanPlayer.relations[aiPlayer.id].attitude - 10);
             }
         }
 
@@ -1291,7 +1336,20 @@
                         options.push('WARRIOR'); // Default to warriors for exploration
                     }
 
-                    city.currentProduction = options[Math.floor(Math.random() * options.length)];
+                    // Select a unit to produce
+                    const selectedUnit = options[Math.floor(Math.random() * options.length)];
+                    const unitDef = UNIT_TYPES[selectedUnit];
+
+                    // Check if the AI has enough gold to start production
+                    if (aiPlayer.gold >= unitDef.goldCost) {
+                        aiPlayer.gold -= unitDef.goldCost; // Deduct gold
+                        city.currentProduction = selectedUnit;
+                        city.production = 0;
+
+                        //logMessage(`${aiPlayer.name} started production of a ${unitDef.name} in ${city.name} for ${unitDef.goldCost} gold.`, aiPlayer.id);
+                    } else {
+                        //logMessage(`${aiPlayer.name} does not have enough gold to produce a ${unitDef.name} in ${city.name}.`, aiPlayer.id);
+                    }
                 }
             }
 
@@ -1348,23 +1406,24 @@
 
                     if (!canTrade) continue; // Skip trade if cities are too far apart
 
-                    // Only offer trades if relations are good
-                    if (relation.attitude >= 40 && Math.random() > 0.8) { // Reduce trade frequency (20% chance)
-                        const goldOffered = Math.floor(Math.random() * 20) + 10; // Random gold amount
-                        const reputationBoost = Math.floor(Math.random() * 5) + 5; // Random reputation boost
+                    // Calculate trade probability based on reputation
+                    const tradeChance = relation.attitude / 100; // Higher attitude increases the chance
+                    if (Math.random() > tradeChance) continue; // Skip trade if the random chance fails
 
-                        // Set hasMet to true for both players
-                        aiPlayer.relations[otherAI.id].hasMet = true;
-                        otherAI.relations[aiPlayer.id].hasMet = true;
+                    const goldOffered = Math.floor(Math.random() * 20) + 10; // Random gold amount
+                    const reputationBoost = Math.floor(Math.random() * 5) + 5; // Random reputation boost
 
-                        // Execute the trade
-                        aiPlayer.gold -= goldOffered;
-                        otherAI.gold += goldOffered;
-                        aiPlayer.relations[otherAI.id].attitude = Math.min(100, relation.attitude + reputationBoost);
-                        otherAI.relations[aiPlayer.id].attitude = Math.min(100, otherAI.relations[aiPlayer.id].attitude + reputationBoost);
+                    // Set hasMet to true for both players
+                    aiPlayer.relations[otherAI.id].hasMet = true;
+                    otherAI.relations[aiPlayer.id].hasMet = true;
 
-                        logMessage(`${aiPlayer.name} traded ${goldOffered} gold with ${otherAI.name}. Relations improved!`, aiPlayer.id, otherAI.id);
-                    }
+                    // Execute the trade
+                    aiPlayer.gold -= goldOffered;
+                    otherAI.gold += goldOffered;
+                    aiPlayer.relations[otherAI.id].attitude = Math.min(100, relation.attitude + reputationBoost);
+                    otherAI.relations[aiPlayer.id].attitude = Math.min(100, otherAI.relations[aiPlayer.id].attitude + reputationBoost);
+
+                    logMessage(`${aiPlayer.name} traded ${goldOffered} gold with ${otherAI.name}. Relations improved!`, aiPlayer.id, otherAI.id);
                 }
             }
         }
@@ -1459,6 +1518,38 @@
                 return threats.reduce((closest, threat) =>
                     threat.distance < closest.distance ? threat : closest
                 ).unit;
+            }
+
+            // Prioritize attacking hostile players
+            const hostilePlayers = gameState.players.filter(player =>
+                player.id !== aiPlayer.id && aiPlayer.relations[player.id]?.attitude < 40
+            );
+
+            if (hostilePlayers.length > 0) {
+                let closestTarget = null;
+                let closestDistance = Infinity;
+
+                for (const hostilePlayer of hostilePlayers) {
+                    // Check units
+                    for (const enemyUnit of hostilePlayer.units) {
+                        const dist = Math.abs(unit.x - enemyUnit.x) + Math.abs(unit.y - enemyUnit.y);
+                        if (dist < closestDistance && canAttack(unit, enemyUnit)) {
+                            closestDistance = dist;
+                            closestTarget = enemyUnit;
+                        }
+                    }
+
+                    // Check cities
+                    for (const enemyCity of hostilePlayer.cities) {
+                        const dist = Math.abs(unit.x - enemyCity.x) + Math.abs(unit.y - enemyCity.y);
+                        if (dist < closestDistance) {
+                            closestDistance = dist;
+                            closestTarget = enemyCity;
+                        }
+                    }
+                }
+
+                if (closestTarget) return closestTarget;
             }
 
             // Prioritize expansion
@@ -1650,13 +1741,15 @@
             const goldOffered = Math.floor(Math.random() * 20) + 10; // Random gold amount
             const reputationBoost = Math.floor(Math.random() * 5) + 5; // Random reputation boost
 
-            const acceptTrade = confirm(`Propose a trade to ${aiPlayer.name}: Offer ${goldOffered} gold in exchange for improving relations by ${reputationBoost} points?`);
+            // AI decides whether to accept the trade based on reputation
+            const tradeChance = relation.attitude / 100; // Higher attitude increases the chance
+            const aiAccepts = Math.random() < tradeChance;
 
             // Set hasMet to true for both players
             humanPlayer.relations[aiPlayerId].hasMet = true;
             aiPlayer.relations[humanPlayer.id].hasMet = true;
 
-            if (acceptTrade) {
+            if (aiAccepts) {
                 if (humanPlayer.gold >= goldOffered) {
                     humanPlayer.gold -= goldOffered;
                     aiPlayer.gold += goldOffered;
@@ -1668,7 +1761,9 @@
                     alert("You don't have enough gold to propose this trade.");
                 }
             } else {
-                logMessage(`${humanPlayer.name} canceled the trade proposal with ${aiPlayer.name}.`, aiPlayerId, humanPlayer.id);
+                logMessage(`${aiPlayer.name} declined a trade proposal from ${humanPlayer.name}.`, aiPlayerId, humanPlayer.id);
+                humanPlayer.relations[aiPlayerId].attitude = Math.min(100, relation.attitude - 10);
+                aiPlayer.relations[humanPlayer.id].attitude = Math.min(100, aiPlayer.relations[humanPlayer.id].attitude - 10);
             }
 
             updateUI();
