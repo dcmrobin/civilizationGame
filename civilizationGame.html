@@ -256,7 +256,7 @@
             GRASSLAND: { name: 'Grassland', moveCost: 1, food: 2, production: 1, color: 'grassland' },
             PLAINS: { name: 'Plains', moveCost: 1, food: 1, production: 0, color: 'plains' },
             DESERT: { name: 'Desert', moveCost: 2, food: 0, production: 0, color: 'desert' },
-            MOUNTAINS: { name: 'Mountains', moveCost: 3, food: 0, production: 1, color: 'mountains' },// make this have a gold boost
+            MOUNTAINS: { name: 'Mountains', moveCost: 3, food: 0, production: 1, color: 'mountains' },
             SNOW: { name: 'Snow', moveCost: 4, food: 0, production: -1, color: 'snow' },
             FOREST: { name: 'Forest', moveCost: 2, food: 1, production: 1, color: 'forest' }
         };
@@ -1007,7 +1007,6 @@
                 if (choice) {
                     city.player = attackerPlayer.id;
                     city.health = 100;
-                    city.population = Math.max(1, Math.floor(city.population / 2));
                     attackerPlayer.cities.push(city);
                     cityPlayer.cities = cityPlayer.cities.filter(c => c !== city);
 
@@ -1022,7 +1021,6 @@
                 if (shouldCapture) {
                     city.player = attackerPlayer.id;
                     city.health = 100;
-                    city.population = Math.max(1, Math.floor(city.population / 2));
                     attackerPlayer.cities.push(city);
                     cityPlayer.cities = cityPlayer.cities.filter(c => c !== city);
 
@@ -1047,7 +1045,6 @@
                 x,
                 y,
                 player: player.id,
-                population: 1,
                 production: 0,
                 currentProduction: null,
                 buildings: [],
@@ -1114,6 +1111,30 @@
             }
 
             return production;
+        }
+
+        function calculateCityGold(x, y) {
+            let gold = 0;
+            const directions = [
+                { dx: 0, dy: -1 }, { dx: 1, dy: 0 },
+                { dx: 0, dy: 1 }, { dx: -1, dy: 0 },
+                { dx: -1, dy: -1 }, { dx: 1, dy: -1 },
+                { dx: -1, dy: 1 }, { dx: 1, dy: 1 }
+            ];
+
+            for (const dir of directions) {
+                const nx = x + dir.dx;
+                const ny = y + dir.dy;
+
+                if (ny >= 0 && ny < gameState.map.length && nx >= 0 && nx < gameState.map[0].length) {
+                    const tile = gameState.map[ny][nx];
+                    if (tile.name === 'Mountains') {
+                        gold += Math.round(Math.abs(Math.random() - 1)); // Add 1 gold for mountain tiles- with a bit of randomness
+                    }
+                }
+            }
+
+            return gold;
         }
 
         // Generate a city name based on player
@@ -1294,18 +1315,12 @@
                         // Complete the movement
                         unit.x = unit.targetX;
                         unit.y = unit.targetY;
-                        //logMessage(`${player.name}'s ${unit.type} has completed its movement to (${unit.x}, ${unit.y}).`, player.id);
                     }
                 } else {
                     // Reset moves if the unit is not in progress of moving
                     unit.moves = UNIT_TYPES[unit.type].move;
                 }
                 unit.hasAttacked = false; // Reset attack status
-            }
-
-            // Reset hasAttacked for all units
-            for (const unit of player.units) {
-                unit.hasAttacked = false;
             }
 
             // Calculate total food production from cities
@@ -1336,14 +1351,19 @@
                 }
             }
 
+            // Calculate gold generation
+            //player.gold = 0; // Reset gold NO
+            for (const city of player.cities) {
+                player.gold += 1; // Base gold per city
+                player.gold += calculateCityGold(city.x, city.y); // Add gold from surrounding tiles
+            }
+
             // Process cities
             for (const city of player.cities) {
                 if (city.currentProduction) {
-                    //city.production += city.food; // Use food as production points
                     city.production += calculateCityProduction(city.x, city.y); // Use production points from surrounding tiles
                     const unitType = UNIT_TYPES[city.currentProduction];
                     if (unitType && city.production >= unitType.cost) {
-
                         const unit = {
                             id: `unit-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, // Unique ID
                             type: city.currentProduction,
@@ -1380,7 +1400,6 @@
                         logMessage(`${player.name} completed production of a ${unitType.name} in ${city.name}.`, player.id);
                     }
                 }
-                player.gold += city.population; // Cities generate gold based on population
             }
 
             // Process research
@@ -2038,7 +2057,6 @@
 
             cityInfoElement.innerHTML = `
                 <h4>${city.name}</h4>
-                <p>Population: ${city.population}</p>
                 <p>Production: ${city.production}/${city.currentProduction ? UNIT_TYPES[city.currentProduction].cost : '0'}</p>
             `;
 
