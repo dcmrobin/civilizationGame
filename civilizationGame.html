@@ -51,6 +51,7 @@
         .plains { background-color: #b7b854; }
         .desert { background-color: #e3d08b; }
         .mountains { background-color: #999999; }
+        .snow { background-color: #ffffff; }
         .forest { background-color: #38761d; }
         
         .unit {
@@ -244,6 +245,7 @@
             PLAINS: { name: 'Plains', moveCost: 1, food: 1, production: 2, color: 'plains' },
             DESERT: { name: 'Desert', moveCost: 2, food: 0, production: 1, color: 'desert' },
             MOUNTAINS: { name: 'Mountains', moveCost: 3, food: 0, production: 3, color: 'mountains' },
+            SNOW: { name: 'Snow', moveCost: 3, food: 0, production: 3, color: 'snow' },
             FOREST: { name: 'Forest', moveCost: 2, food: 1, production: 2, color: 'forest' }
         };
 
@@ -430,11 +432,13 @@
 
                     // Determine tile type based on height, temperature, and humidity
                     let tileType;
-                    if (heightValue < 0.3) {
+                    if (heightValue < 0.34) {
                         tileType = TILE_TYPES.OCEAN; // Ocean
                     } else if (heightValue < 0.4) {
                         tileType = TILE_TYPES.COAST; // Coast
-                    } else if (heightValue > 0.8) {
+                    } else if (heightValue > 0.7) {
+                        tileType = TILE_TYPES.SNOW; // Snow
+                    } else if (heightValue > 0.65) {
                         tileType = TILE_TYPES.MOUNTAINS; // Mountains
                     } else if (temperatureValue > 0.7 && humidityValue < 0.3) {
                         tileType = TILE_TYPES.DESERT; // Desert
