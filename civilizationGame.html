@@ -458,14 +458,15 @@
                     units: [],
                     color: 'player1',
                     isHuman: true,
-                    relations: {}
+                    relations: {},
+                    exploredTiles: new Set() // Track explored tiles
                 }
             ];
-            
+
             // Add AI players
             const aiColors = ['player2', 'player3', 'player4'];
             const aiNames = ['Rome', 'Greece', 'Egypt'];
-            
+
             for (let i = 0; i < 3; i++) {
                 gameState.players.push({
                     id: i + 1,
@@ -478,11 +479,12 @@
                     units: [],
                     color: aiColors[i],
                     isHuman: false,
-                    relations: {}
+                    relations: {},
+                    exploredTiles: new Set() // Track explored tiles
                 });
             }
-            
-            // Initialize relations
+
+            // Initialize relations for all players
             for (const player of gameState.players) {
                 for (const otherPlayer of gameState.players) {
                     if (player.id !== otherPlayer.id) {
@@ -772,8 +774,17 @@
                 city.health -= attackerStrength;
 
                 logMessage(`${attackerPlayer.name} is attacking ${city.name}!`, attacker.player);
-                attackerPlayer.relations[cityPlayer.player].attitude = Math.max(0, attackerPlayer.relations[cityPlayer.player].attitude - 10);
-                cityPlayer.relations[attackerPlayer.player].attitude = Math.max(0, cityPlayer.relations[attackerPlayer.player].attitude - 20);
+
+                // Ensure relations exist before modifying them
+                if (!attackerPlayer.relations[cityPlayer.id]) {
+                    attackerPlayer.relations[cityPlayer.id] = { attitude: 50, hasMet: true };
+                }
+                if (!cityPlayer.relations[attackerPlayer.id]) {
+                    cityPlayer.relations[attackerPlayer.id] = { attitude: 50, hasMet: true };
+                }
+
+                attackerPlayer.relations[cityPlayer.id].attitude = Math.max(0, attackerPlayer.relations[cityPlayer.id].attitude - 10);
+                cityPlayer.relations[attackerPlayer.id].attitude = Math.max(0, cityPlayer.relations[attackerPlayer.id].attitude - 20);
 
                 if (city.health <= 0) {
                     logMessage(`${city.name} has been defeated!`, attacker.player);
@@ -798,10 +809,18 @@
                 attacker.y = defender.y;
                 attacker.moves = 0;
 
+                // Ensure relations exist before modifying them
+                if (!defenderPlayer.relations[attacker.player]) {
+                    defenderPlayer.relations[attacker.player] = { attitude: 50, hasMet: true };
+                }
                 defenderPlayer.relations[attacker.player].attitude = Math.max(0, defenderPlayer.relations[attacker.player].attitude - 20);
             } else {
                 attackerPlayer.units = attackerPlayer.units.filter(u => u !== attacker);
 
+                // Ensure relations exist before modifying them
+                if (!attackerPlayer.relations[defender.player]) {
+                    attackerPlayer.relations[defender.player] = { attitude: 50, hasMet: true };
+                }
                 attackerPlayer.relations[defender.player].attitude = Math.max(0, attackerPlayer.relations[defender.player].attitude - 10);
             }
 
@@ -948,73 +967,57 @@
 
         // End the current player's turn
         function endTurn() {
+            // Disable the "End Turn" button
+            const endTurnButton = document.getElementById('end-turn-btn');
+            endTurnButton.disabled = true;
+
             const currentPlayer = gameState.players[gameState.currentPlayer];
             processQueuedMoves();
 
-            if (currentPlayer.isHuman) {
-                const activeDestinations = Object.entries(gameState.unitDestinations);
-
-                for (const [key, destination] of activeDestinations) {
-                    const [x, y] = key.split(',').map(Number);
-                    const unit = findUnitAt(x, y);
-
-                    if (unit && unit.moves > 0) {
-                        let path = destination.path;
-
-                        // Recalculate path only if it's empty or invalid
-                        if (!path || path.length === 0 || !isPathValid(path, unit)) {
-                            path = findPath(unit.x, unit.y, destination.targetX, destination.targetY, unit);
-                            destination.path = path;
-                        }
-
-                        if (path.length > 0) {
-                            const nextStep = path[0];
-                            if (canMoveTo(unit, nextStep.x, nextStep.y)) {
-                                moveUnit(unit, nextStep.x, nextStep.y);
-                                destination.path = path.slice(1); // Remove the first step
-                            } else {
-                                delete gameState.unitDestinations[key];
-                            }
-                        } else {
-                            delete gameState.unitDestinations[key];
-                        }
-                    }
-                }
-            }
-
-            // Process cities and research for current player
+            // Process the current player's turn (cities, research, etc.)
             processPlayerTurn(currentPlayer);
 
-            // Move to next player
+            // Move to the next player
             let nextPlayerIndex = (gameState.currentPlayer + 1) % gameState.players.length;
 
             // Process all AI turns automatically
-            while (nextPlayerIndex !== 0) {
-                gameState.currentPlayer = nextPlayerIndex;
-                const nextPlayer = gameState.players[gameState.currentPlayer];
+            const processAITurns = () => {
+                if (nextPlayerIndex !== 0) {
+                    gameState.currentPlayer = nextPlayerIndex;
+                    const nextPlayer = gameState.players[gameState.currentPlayer];
 
-                if (!nextPlayer.isHuman) {
-                    aiTurn(nextPlayer);
-                    processPlayerTurn(nextPlayer);
-                }
+                    if (!nextPlayer.isHuman) {
+                        aiTurn(nextPlayer); // Process AI turn
+                        processPlayerTurn(nextPlayer); // Process AI cities and research
+                    }
 
-                nextPlayerIndex = (gameState.currentPlayer + 1) % gameState.players.length;
-                if (nextPlayerIndex === 0) {
+                    nextPlayerIndex = (gameState.currentPlayer + 1) % gameState.players.length;
+
+                    // Continue processing AI turns
+                    setTimeout(processAITurns, 100); // Add a small delay for smoother UI updates
+                } else {
+                    // Return to the human player's turn
+                    gameState.currentPlayer = 0;
+
+                    // Reset human player's unit moves
+                    const humanPlayer = gameState.players[0];
+                    for (const unit of humanPlayer.units) {
+                        unit.moves = UNIT_TYPES[unit.type].move;
+                    }
+
+                    // Increment the turn counter
                     gameState.turn++;
+
+                    // Update the UI and re-render the map
+                    renderMap();
+                    updateUI();
+
+                    // Re-enable the "End Turn" button
+                    endTurnButton.disabled = false;
                 }
-            }
+            };
 
-            // Return to human player
-            gameState.currentPlayer = 0;
-
-            // Reset human player's unit moves
-            const humanPlayer = gameState.players[0];
-            for (const unit of humanPlayer.units) {
-                unit.moves = UNIT_TYPES[unit.type].move;
-            }
-
-            renderMap();
-            updateUI();
+            processAITurns();
         }
 
         function isPathValid(path, unit) {
@@ -1200,47 +1203,37 @@
 
         // AI player turn
         function aiTurn(aiPlayer) {
+            // 1. Assess the current situation
+            const threats = assessThreats(aiPlayer);
+            const expansionOpportunities = findExpansionOpportunities(aiPlayer);
 
-            let totalFood = 0;
-            let totalFoodConsumption = 0;
-
-            // Calculate total food production and consumption
-            for (const city of aiPlayer.cities) {
-                totalFood += city.food;
-            }
-            for (const unit of aiPlayer.units) {
-                totalFoodConsumption += UNIT_TYPES[unit.type].foodConsumption;
-            }
-
-            // Avoid producing units if food is low or unit cap is reached
-            const unitCap = calculateUnitCap(aiPlayer);
-            const canProduceUnits = totalFood > totalFoodConsumption && aiPlayer.units.length < unitCap;
-
-            // Process city production
+            // 2. Process city production
             for (const city of aiPlayer.cities) {
                 if (!city.currentProduction) {
                     const options = [];
 
-                    // Build settlers if unit cap is reached
-                    if (aiPlayer.units.length >= unitCap && Math.random() > 0.5) {
+                    // Build settlers if there are expansion opportunities
+                    if (expansionOpportunities.length > 0 && Math.random() > 0.3) {
                         options.push('SETTLER');
                     }
 
-                    // Build military units if relations are hostile or cities are under threat
-                    const isUnderThreat = isCityUnderThreat(city, aiPlayer);
-                    if (canProduceUnits && (isUnderThreat || Math.random() > 0.5)) {
+                    // Build military units if under threat or relations are hostile
+                    if (threats.length > 0 || isHostile(aiPlayer)) {
                         options.push('WARRIOR');
                         if (aiPlayer.researchedTechs.has('ARCHERY')) options.push('ARCHER');
                         if (aiPlayer.researchedTechs.has('BRONZE_WORKING')) options.push('SPEARMAN');
                     }
 
-                    if (options.length > 0) {
-                        city.currentProduction = options[Math.floor(Math.random() * options.length)];
+                    // Default to economic units if no immediate threats
+                    if (options.length === 0) {
+                        options.push('WARRIOR'); // Default to warriors for exploration
                     }
+
+                    city.currentProduction = options[Math.floor(Math.random() * options.length)];
                 }
             }
 
-            // 2. Process research
+            // 3. Process research
             if (!aiPlayer.currentResearch) {
                 const availableTechs = Object.keys(TECH_TREE).filter(tech =>
                     !aiPlayer.researchedTechs.has(tech)
@@ -1250,57 +1243,168 @@
                 }
             }
 
-            // 3. Move units with purpose
+            // 4. Move units
             for (const unit of aiPlayer.units) {
                 if (unit.moves > 0) {
-                    // Try to find something to attack
-                    let target = findNearestTarget(unit, aiPlayer);
+                    const target = findBestTarget(unit, aiPlayer, threats, expansionOpportunities);
 
                     if (target) {
-                        // Move toward target
+                        // Move toward the target
                         const path = findPath(unit.x, unit.y, target.x, target.y, unit);
                         if (path.length > 0) {
                             const nextStep = path[0];
                             moveUnit(unit, nextStep.x, nextStep.y);
-                            continue;
                         }
-                    }
-
-                    // No target found - explore or defend
-                    if (Math.random() > 0.5) {
-                        // Explore
-                        const directions = [
-                            { dx: 0, dy: -1 }, { dx: 1, dy: 0 },
-                            { dx: 0, dy: 1 }, { dx: -1, dy: 0 }
-                        ];
-                        directions.sort(() => Math.random() - 0.5);
-
-                        for (const dir of directions) {
-                            const nx = unit.x + dir.dx;
-                            const ny = unit.y + dir.dy;
-                            if (canMoveTo(unit, nx, ny)) {
-                                moveUnit(unit, nx, ny);
-                                break;
-                            }
-                        }
+                    } else {
+                        // Explore if no target is found
+                        explore(unit, aiPlayer);
                     }
                 }
             }
         }
 
-        // Helper function to check if a city is under threat
-        function isCityUnderThreat(city, aiPlayer) {
-            for (const player of gameState.players) {
-                if (player.id !== aiPlayer.id) {
-                    for (const unit of player.units) {
-                        const distance = Math.abs(unit.x - city.x) + Math.abs(unit.y - city.y);
-                        if (distance <= 2) {
-                            return true; // Enemy unit is near the city
+        function explore(unit, aiPlayer) {
+            const directions = [
+                { dx: 0, dy: -1 }, { dx: 1, dy: 0 },
+                { dx: 0, dy: 1 }, { dx: -1, dy: 0 }
+            ];
+
+            // Find the nearest unexplored tile
+            let nearestUnexplored = null;
+            let shortestDistance = Infinity;
+
+            for (let y = 0; y < gameState.map.length; y++) {
+                for (let x = 0; x < gameState.map[y].length; x++) {
+                    const tileKey = `${x},${y}`;
+                    if (!aiPlayer.exploredTiles.has(tileKey)) {
+                        const distance = Math.abs(unit.x - x) + Math.abs(unit.y - y);
+                        if (distance < shortestDistance) {
+                            shortestDistance = distance;
+                            nearestUnexplored = { x, y };
                         }
                     }
                 }
             }
-            return false;
+
+            if (nearestUnexplored) {
+                const path = findPath(unit.x, unit.y, nearestUnexplored.x, nearestUnexplored.y, unit);
+                if (path.length > 0) {
+                    const nextStep = path[0];
+                    moveUnit(unit, nextStep.x, nextStep.y);
+                }
+            } else {
+                // Random movement if no unexplored tiles are found
+                directions.sort(() => Math.random() - 0.5);
+                for (const dir of directions) {
+                    const nx = unit.x + dir.dx;
+                    const ny = unit.y + dir.dy;
+                    if (canMoveTo(unit, nx, ny)) {
+                        moveUnit(unit, nx, ny);
+                        break;
+                    }
+                }
+            }
+
+            // Mark the current tile as explored
+            aiPlayer.exploredTiles.add(`${unit.x},${unit.y}`);
+        }
+
+        // Assess threats to the AI player
+        function assessThreats(aiPlayer) {
+            const threats = [];
+            for (const player of gameState.players) {
+                if (player.id !== aiPlayer.id) {
+                    for (const unit of player.units) {
+                        for (const city of aiPlayer.cities) {
+                            const distance = Math.abs(unit.x - city.x) + Math.abs(unit.y - city.y);
+                            if (distance <= 2) {
+                                threats.push({ unit, city, distance });
+                            }
+                        }
+                    }
+                }
+            }
+            return threats;
+        }
+
+        // Find expansion opportunities
+        function findExpansionOpportunities(aiPlayer) {
+            const opportunities = [];
+            for (let y = 0; y < gameState.map.length; y++) {
+                for (let x = 0; x < gameState.map[y].length; x++) {
+                    const tile = gameState.map[y][x];
+                    if (tile.name !== 'Ocean' && tile.name !== 'Coast' && !findCityAt(x, y)) {
+                        opportunities.push({ x, y });
+                    }
+                }
+            }
+            return opportunities;
+        }
+
+        // Check if the AI has hostile relations
+        function isHostile(aiPlayer) {
+            return Object.values(aiPlayer.relations).some(rel => rel.attitude < 40);
+        }
+
+        // Find the best target for a unit
+        function findBestTarget(unit, aiPlayer, threats, expansionOpportunities) {
+            // Prioritize threats
+            if (threats.length > 0) {
+                return threats.reduce((closest, threat) =>
+                    threat.distance < closest.distance ? threat : closest
+                ).unit;
+            }
+
+            // Prioritize expansion
+            if (unit.type === 'SETTLER' && expansionOpportunities.length > 0) {
+                return expansionOpportunities[0]; // Pick the first opportunity
+            }
+
+            // Default to exploring
+            return null;
+        }
+
+        // Explore the map
+        function explore(unit) {
+            const directions = [
+                { dx: 0, dy: -1 }, { dx: 1, dy: 0 },
+                { dx: 0, dy: 1 }, { dx: -1, dy: 0 }
+            ];
+            directions.sort(() => Math.random() - 0.5);
+
+            for (const dir of directions) {
+                const nx = unit.x + dir.dx;
+                const ny = unit.y + dir.dy;
+                if (canMoveTo(unit, nx, ny)) {
+                    moveUnit(unit, nx, ny);
+                    break;
+                }
+            }
+        }
+
+        // Prioritize research based on AI strategy
+        function prioritizeResearch(aiPlayer, availableTechs) {
+            // Example: Prioritize military techs if relations are hostile
+            const hostileRelations = Object.values(aiPlayer.relations).some(rel => rel.attitude < 40);
+            if (hostileRelations) {
+                const militaryTechs = availableTechs.filter(tech =>
+                    ['ARCHERY', 'BRONZE_WORKING'].includes(tech)
+                );
+                if (militaryTechs.length > 0) {
+                    return militaryTechs[Math.floor(Math.random() * militaryTechs.length)];
+                }
+            }
+
+            // Otherwise, prioritize expansion or economy
+            const expansionTechs = availableTechs.filter(tech =>
+                ['POTTERY', 'WRITING'].includes(tech)
+            );
+            if (expansionTechs.length > 0) {
+                return expansionTechs[Math.floor(Math.random() * expansionTechs.length)];
+            }
+
+            // Default to random tech
+            return availableTechs[Math.floor(Math.random() * availableTechs.length)];
         }
 
         // Helper function to prioritize research
