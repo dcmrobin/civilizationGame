@@ -254,7 +254,7 @@
             OCEAN: { name: 'Ocean', moveCost: 1, food: 1, production: 0, gold: 1, color: 'ocean' },
             COAST: { name: 'Coast', moveCost: 1, food: 2, production: 0, gold: 0, color: 'coast' },
             GRASSLAND: { name: 'Grassland', moveCost: 1, food: 2, production: 1, gold: 0, color: 'grassland' },
-            PLAINS: { name: 'Plains', moveCost: 1, food: 1, production: 0, gold: 0, color: 'plains' },
+            PLAINS: { name: 'Plains', moveCost: 1, food: 1, production: 1, gold: 0, color: 'plains' },
             DESERT: { name: 'Desert', moveCost: 2, food: 0, production: 0, gold: 0, color: 'desert' },
             MOUNTAINS: { name: 'Mountains', moveCost: 3, food: 0, production: 1, gold: 1, color: 'mountains' },
             SNOW: { name: 'Snow', moveCost: 4, food: 0, production: -1, gold: 0, color: 'snow' },
@@ -878,8 +878,7 @@
             const attackerPlayer = gameState.players[attacker.player];
 
             if (attacker.hasAttacked) {
-                //logMessage(`${gameState.players[attacker.player].name}'s ${attacker.type} cannot attack again this turn.`, attacker.player);
-                return;
+                return; // Prevent multiple attacks in the same turn
             }
 
             if (target.health !== undefined) {
@@ -893,30 +892,33 @@
                 logMessage(`${attackerPlayer.name} is attacking ${city.name}!`, attacker.player, city.player);
 
                 // Ensure relations exist before modifying them
-                if (!attackerPlayer.relations[cityPlayer.id]) {
-                    attackerPlayer.relations[cityPlayer.id] = { attitude: 50, hasMet: true };
-                }
-                if (!cityPlayer.relations[attackerPlayer.id]) {
-                    cityPlayer.relations[attackerPlayer.id] = { attitude: 50, hasMet: true };
-                }
+                if (attackerPlayer.id !== cityPlayer.id) { // Prevent self-hostility
+                    if (!attackerPlayer.relations[cityPlayer.id]) {
+                        attackerPlayer.relations[cityPlayer.id] = { attitude: 50, hasMet: true };
+                    }
+                    if (!cityPlayer.relations[attackerPlayer.id]) {
+                        cityPlayer.relations[attackerPlayer.id] = { attitude: 50, hasMet: true };
+                    }
 
-                // Set `hasMet` to true for both players
-                attackerPlayer.relations[cityPlayer.id].hasMet = true;
-                cityPlayer.relations[attackerPlayer.id].hasMet = true;
+                    // Set `hasMet` to true for both players
+                    attackerPlayer.relations[cityPlayer.id].hasMet = true;
+                    cityPlayer.relations[attackerPlayer.id].hasMet = true;
 
-                // Decrease reputation for both players
-                attackerPlayer.relations[cityPlayer.id].attitude = Math.max(0, attackerPlayer.relations[cityPlayer.id].attitude - 10);
-                cityPlayer.relations[attackerPlayer.id].attitude = Math.max(0, cityPlayer.relations[attackerPlayer.id].attitude - 10);
+                    // Decrease reputation for both players
+                    attackerPlayer.relations[cityPlayer.id].attitude = Math.max(0, attackerPlayer.relations[cityPlayer.id].attitude - 10);
+                    cityPlayer.relations[attackerPlayer.id].attitude = Math.max(0, cityPlayer.relations[attackerPlayer.id].attitude - 10);
+                }
 
                 // Check for allies of the defender
                 for (const ally of gameState.players) {
                     if (ally.id !== cityPlayer.id && ally.relations[cityPlayer.id]?.attitude >= 80) {
                         // Ally becomes hostile toward the attacker
-                        ally.relations[attacker.player] = ally.relations[attacker.player] || { attitude: 50, hasMet: true };
-                        ally.relations[attacker.player].attitude = Math.max(0, ally.relations[attacker.player].attitude - 40);
+                        if (ally.id !== attackerPlayer.id) { // Prevent self-hostility
+                            ally.relations[attacker.player] = ally.relations[attacker.player] || { attitude: 50, hasMet: true };
+                            ally.relations[attacker.player].attitude = Math.max(0, ally.relations[attacker.player].attitude - 40);
 
-                        // Log the alliance response
-                        logMessage(`${ally.name} has come to the aid of ${cityPlayer.name} and is now hostile toward ${attackerPlayer.name}!`, ally.id, attacker.player);
+                            logMessage(`${ally.name} has come to the aid of ${cityPlayer.name} and is now hostile toward ${attackerPlayer.name}!`, ally.id, attacker.player);
+                        }
                     }
                 }
 
@@ -926,7 +928,6 @@
                 }
 
                 attacker.hasAttacked = true;
-
                 return;
             }
 
@@ -938,68 +939,70 @@
             const attackerStrength = attackerType.strength * (1 + Math.random() * 0.2);
             const defenderStrength = defenderType.strength * (1 + Math.random() * 0.2);
 
-            if (attackerStrength > defenderStrength && attackerType != UNIT_TYPES.SETTLER) {
+            if (attackerStrength > defenderStrength) {
                 defenderPlayer.units = defenderPlayer.units.filter(u => u !== defender);
 
                 attacker.x = defender.x;
                 attacker.y = defender.y;
                 attacker.moves = 0;
 
-                // Ensure relations exist before modifying them
-                if (!defenderPlayer.relations[attacker.player]) {
-                    defenderPlayer.relations[attacker.player] = { attitude: 50, hasMet: true };
-                }
-                if (!attackerPlayer.relations[defender.player]) {
-                    attackerPlayer.relations[defender.player] = { attitude: 50, hasMet: true };
-                }
+                if (attackerPlayer.id !== defenderPlayer.id) { // Prevent self-hostility
+                    if (!defenderPlayer.relations[attacker.player]) {
+                        defenderPlayer.relations[attacker.player] = { attitude: 50, hasMet: true };
+                    }
+                    if (!attackerPlayer.relations[defender.player]) {
+                        attackerPlayer.relations[defender.player] = { attitude: 50, hasMet: true };
+                    }
 
-                // Set `hasMet` to true for both players
-                attackerPlayer.relations[defender.player].hasMet = true;
-                defenderPlayer.relations[attacker.player].hasMet = true;
+                    // Set `hasMet` to true for both players
+                    attackerPlayer.relations[defender.player].hasMet = true;
+                    defenderPlayer.relations[attacker.player].hasMet = true;
 
-                // Decrease reputation for both players
-                defenderPlayer.relations[attacker.player].attitude = Math.max(0, defenderPlayer.relations[attacker.player].attitude - 10);
-                attackerPlayer.relations[defender.player].attitude = Math.max(0, attackerPlayer.relations[defender.player].attitude - 10);
+                    // Decrease reputation for both players
+                    defenderPlayer.relations[attacker.player].attitude = Math.max(0, defenderPlayer.relations[attacker.player].attitude - 10);
+                    attackerPlayer.relations[defender.player].attitude = Math.max(0, attackerPlayer.relations[defender.player].attitude - 10);
+                }
 
                 // Check for allies of the defender
                 for (const ally of gameState.players) {
                     if (ally.id !== defenderPlayer.id && ally.relations[defenderPlayer.id]?.attitude >= 80) {
-                        // Ally becomes hostile toward the attacker
-                        ally.relations[attacker.player] = ally.relations[attacker.player] || { attitude: 50, hasMet: true };
-                        ally.relations[attacker.player].attitude = Math.max(0, ally.relations[attacker.player].attitude - 40);
+                        if (ally.id !== attackerPlayer.id) { // Prevent self-hostility
+                            ally.relations[attacker.player] = ally.relations[attacker.player] || { attitude: 50, hasMet: true };
+                            ally.relations[attacker.player].attitude = Math.max(0, ally.relations[attacker.player].attitude - 40);
 
-                        // Log the alliance response
-                        logMessage(`${ally.name} has come to the aid of ${defenderPlayer.name} and is now hostile toward ${attackerPlayer.name}!`, ally.id, attacker.player);
+                            logMessage(`${ally.name} has come to the aid of ${defenderPlayer.name} and is now hostile toward ${attackerPlayer.name}!`, ally.id, attacker.player);
+                        }
                     }
                 }
             } else {
                 attackerPlayer.units = attackerPlayer.units.filter(u => u !== attacker);
 
-                // Ensure relations exist before modifying them
-                if (!attackerPlayer.relations[defender.player]) {
-                    attackerPlayer.relations[defender.player] = { attitude: 50, hasMet: true };
-                }
-                if (!defenderPlayer.relations[attacker.player]) {
-                    defenderPlayer.relations[attacker.player] = { attitude: 50, hasMet: true };
-                }
+                if (attackerPlayer.id !== defenderPlayer.id) { // Prevent self-hostility
+                    if (!attackerPlayer.relations[defender.player]) {
+                        attackerPlayer.relations[defender.player] = { attitude: 50, hasMet: true };
+                    }
+                    if (!defenderPlayer.relations[attacker.player]) {
+                        defenderPlayer.relations[attacker.player] = { attitude: 50, hasMet: true };
+                    }
 
-                // Set `hasMet` to true for both players
-                attackerPlayer.relations[defender.player].hasMet = true;
-                defenderPlayer.relations[attacker.player].hasMet = true;
+                    // Set `hasMet` to true for both players
+                    attackerPlayer.relations[defender.player].hasMet = true;
+                    defenderPlayer.relations[attacker.player].hasMet = true;
 
-                // Decrease reputation for both players
-                attackerPlayer.relations[defender.player].attitude = Math.max(0, attackerPlayer.relations[defender.player].attitude - 10);
-                defenderPlayer.relations[attacker.player].attitude = Math.max(0, defenderPlayer.relations[attacker.player].attitude - 10);
+                    // Decrease reputation for both players
+                    attackerPlayer.relations[defender.player].attitude = Math.max(0, attackerPlayer.relations[defender.player].attitude - 10);
+                    defenderPlayer.relations[attacker.player].attitude = Math.max(0, defenderPlayer.relations[attacker.player].attitude - 10);
+                }
 
                 // Check for allies of the defender
                 for (const ally of gameState.players) {
                     if (ally.id !== defenderPlayer.id && ally.relations[defenderPlayer.id]?.attitude >= 80) {
-                        // Ally becomes hostile toward the attacker
-                        ally.relations[attacker.player] = ally.relations[attacker.player] || { attitude: 50, hasMet: true };
-                        ally.relations[attacker.player].attitude = Math.max(0, ally.relations[attacker.player].attitude - 40);
+                        if (ally.id !== attackerPlayer.id) { // Prevent self-hostility
+                            ally.relations[attacker.player] = ally.relations[attacker.player] || { attitude: 50, hasMet: true };
+                            ally.relations[attacker.player].attitude = Math.max(0, ally.relations[attacker.player].attitude - 40);
 
-                        // Log the alliance response
-                        logMessage(`${ally.name} has come to the aid of ${defenderPlayer.name} and is now hostile toward ${attackerPlayer.name}!`, ally.id, attacker.player);
+                            logMessage(`${ally.name} has come to the aid of ${defenderPlayer.name} and is now hostile toward ${attackerPlayer.name}!`, ally.id, attacker.player);
+                        }
                     }
                 }
             }
