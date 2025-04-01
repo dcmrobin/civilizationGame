@@ -262,11 +262,11 @@
         };
 
         const UNIT_TYPES = {
-            SETTLER: { name: 'Settler', cost: 30, goldCost: 100, strength: 0, move: 1, production: ['CITY'], foodConsumption: 2 },
-            WARRIOR: { name: 'Warrior', cost: 10, goldCost: 50, strength: 20, move: 1, production: ['CITY'], foodConsumption: 1 },
-            ARCHER: { name: 'Archer', cost: 20, goldCost: 75, strength: 10, move: 1, production: ['CITY'], requires: 'ARCHERY', foodConsumption: 1 },
-            SPEARMAN: { name: 'Spearman', cost: 20, goldCost: 75, strength: 30, move: 1, production: ['CITY'], requires: 'BRONZE_WORKING', foodConsumption: 1 },
-            GALLEY: { name: 'Galley', cost: 30, goldCost: 150, strength: 10, move: 3, production: ['PORT'], naval: true, foodConsumption: 2 }
+            SETTLER: { name: 'Settler', cost: 30, goldCost: 50, strength: 0, move: 1, production: ['CITY'], foodConsumption: 2 },
+            WARRIOR: { name: 'Warrior', cost: 10, goldCost: 30, strength: 20, move: 1, production: ['CITY'], foodConsumption: 1 },
+            ARCHER: { name: 'Archer', cost: 20, goldCost: 40, strength: 10, move: 1, production: ['CITY'], requires: 'ARCHERY', foodConsumption: 1 },
+            SPEARMAN: { name: 'Spearman', cost: 20, goldCost: 50, strength: 30, move: 1, production: ['CITY'], requires: 'BRONZE_WORKING', foodConsumption: 1 },
+            GALLEY: { name: 'Galley', cost: 30, goldCost: 120, strength: 10, move: 3, production: ['PORT'], naval: true, foodConsumption: 2 }
         };
 
         const TECH_TREE = {
@@ -785,10 +785,9 @@
 
             // Check if the unit has enough movement points
             if (unit.moves < tile.moveCost) {
-                // Start movement delay
-                unit.remainingMoves = tile.moveCost - unit.moves + 1; // Add 1 to account for the full moveCost
-                unit.moves = 0; // Use up all movement points for this turn
-                unit.targetX = x; // Store the target tile
+                unit.remainingMoves = tile.moveCost - unit.moves + 1;
+                unit.moves = 0;
+                unit.targetX = x;
                 unit.targetY = y;
                 //logMessage(`${gameState.players[unit.player].name}'s ${unit.type} is moving to (${x}, ${y}). ${unit.remainingMoves} turns remaining.`, unit.player);
                 return;
@@ -797,7 +796,13 @@
             // Check for combat with another unit
             const otherUnit = findUnitAt(x, y);
             if (otherUnit && otherUnit.player !== unit.player) {
-                // Resolve combat with the other unit
+                // Initialize relations
+                const attackerPlayer = gameState.players[unit.player];
+                const defenderPlayer = gameState.players[otherUnit.player];
+                attackerPlayer.relations[defenderPlayer.id].hasMet = true;
+                defenderPlayer.relations[attackerPlayer.id].hasMet = true;
+
+                // Resolve combat
                 resolveCombat(unit, otherUnit);
                 return;
             }
@@ -805,17 +810,14 @@
             // Check for combat with a city
             const city = findCityAt(x, y);
             if (city && city.player !== unit.player) {
-                const unitPlayer = gameState.players[unit.player];
+                const attackerPlayer = gameState.players[unit.player];
                 const cityPlayer = gameState.players[city.player];
 
-                // Check reputation before attacking the city
-                const relation = unitPlayer.relations[cityPlayer.id];
-                if (relation && relation.attitude >= 40) {
-                    logMessage(`${unitPlayer.name}'s ${unit.type} avoided attacking ${city.name} due to good relations.`, unit.player, city.player);
-                    return;
-                }
+                // Initialize relations
+                attackerPlayer.relations[cityPlayer.id].hasMet = true;
+                cityPlayer.relations[attackerPlayer.id].hasMet = true;
 
-                // If relations are hostile, attack the city
+                // Resolve combat
                 resolveCombat(unit, city);
                 return;
             }
@@ -823,7 +825,7 @@
             // Regular movement
             unit.x = x;
             unit.y = y;
-            unit.moves -= tile.moveCost; // Deduct movement points based on tile's moveCost
+            unit.moves -= tile.moveCost;
             //logMessage(`${gameState.players[unit.player].name}'s ${unit.type} moved to (${x}, ${y}).`, unit.player);
 
             renderMap();
@@ -883,6 +885,10 @@
                     cityPlayer.relations[attackerPlayer.id] = { attitude: 50, hasMet: true };
                 }
 
+                // Set `hasMet` to true for both players
+                attackerPlayer.relations[cityPlayer.id].hasMet = true;
+                cityPlayer.relations[attackerPlayer.id].hasMet = true;
+
                 // Decrease reputation for both players
                 attackerPlayer.relations[cityPlayer.id].attitude = Math.max(0, attackerPlayer.relations[cityPlayer.id].attitude - 10);
                 cityPlayer.relations[attackerPlayer.id].attitude = Math.max(0, cityPlayer.relations[attackerPlayer.id].attitude - 10);
@@ -932,6 +938,10 @@
                     attackerPlayer.relations[defender.player] = { attitude: 50, hasMet: true };
                 }
 
+                // Set `hasMet` to true for both players
+                attackerPlayer.relations[defender.player].hasMet = true;
+                defenderPlayer.relations[attacker.player].hasMet = true;
+
                 // Decrease reputation for both players
                 defenderPlayer.relations[attacker.player].attitude = Math.max(0, defenderPlayer.relations[attacker.player].attitude - 10);
                 attackerPlayer.relations[defender.player].attitude = Math.max(0, attackerPlayer.relations[defender.player].attitude - 10);
@@ -958,6 +968,10 @@
                     defenderPlayer.relations[attacker.player] = { attitude: 50, hasMet: true };
                 }
 
+                // Set `hasMet` to true for both players
+                attackerPlayer.relations[defender.player].hasMet = true;
+                defenderPlayer.relations[attacker.player].hasMet = true;
+
                 // Decrease reputation for both players
                 attackerPlayer.relations[defender.player].attitude = Math.max(0, attackerPlayer.relations[defender.player].attitude - 10);
                 defenderPlayer.relations[attacker.player].attitude = Math.max(0, defenderPlayer.relations[attacker.player].attitude - 10);
@@ -976,9 +990,6 @@
             }
 
             attacker.hasAttacked = true;
-
-            attackerPlayer.relations[defender.player].hasMet = true;
-            defenderPlayer.relations[attacker.player].hasMet = true;
         }
 
         function captureOrDestroyCity(attackerPlayer, cityPlayer, city) {
@@ -1342,7 +1353,13 @@
             // Process cities
             for (const city of player.cities) {
                 if (city.currentProduction) {
-                    city.production += calculateCityProduction(city.x, city.y); // Use production points from surrounding tiles
+                    if (city.production >= 0) {
+                        city.production += calculateCityProduction(city.x, city.y); // Use production points from surrounding tiles
+                    }
+                    if (city.production < 0) {
+                        city.production = 0; // Ensure production doesn't go negative
+                        logMessage("${player.name}'s city ${city.name} has no production available.", player.id);
+                    }
                     const unitType = UNIT_TYPES[city.currentProduction];
                     if (unitType && city.production >= unitType.cost) {
                         const unit = {
