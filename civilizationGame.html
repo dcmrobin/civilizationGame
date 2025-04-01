@@ -783,8 +783,12 @@
                     cityPlayer.relations[attackerPlayer.id] = { attitude: 50, hasMet: true };
                 }
 
+                // Decrease reputation for both players
                 attackerPlayer.relations[cityPlayer.id].attitude = Math.max(0, attackerPlayer.relations[cityPlayer.id].attitude - 10);
-                cityPlayer.relations[attackerPlayer.id].attitude = Math.max(0, cityPlayer.relations[attackerPlayer.id].attitude - 20);
+                cityPlayer.relations[attackerPlayer.id].attitude = Math.max(0, cityPlayer.relations[attackerPlayer.id].attitude - 10);
+
+                // Log reputation change
+                //logMessage(`${attackerPlayer.name} and ${cityPlayer.name}'s relations have worsened!`, null);
 
                 if (city.health <= 0) {
                     logMessage(`${city.name} has been defeated!`, attacker.player);
@@ -813,7 +817,16 @@
                 if (!defenderPlayer.relations[attacker.player]) {
                     defenderPlayer.relations[attacker.player] = { attitude: 50, hasMet: true };
                 }
-                defenderPlayer.relations[attacker.player].attitude = Math.max(0, defenderPlayer.relations[attacker.player].attitude - 20);
+                if (!attackerPlayer.relations[defender.player]) {
+                    attackerPlayer.relations[defender.player] = { attitude: 50, hasMet: true };
+                }
+
+                // Decrease reputation for both players
+                defenderPlayer.relations[attacker.player].attitude = Math.max(0, defenderPlayer.relations[attacker.player].attitude - 10);
+                attackerPlayer.relations[defender.player].attitude = Math.max(0, attackerPlayer.relations[defender.player].attitude - 10);
+
+                // Log reputation change
+                logMessage(`${attackerPlayer.name} and ${defenderPlayer.name}'s relations have worsened!`, null);
             } else {
                 attackerPlayer.units = attackerPlayer.units.filter(u => u !== attacker);
 
@@ -821,7 +834,16 @@
                 if (!attackerPlayer.relations[defender.player]) {
                     attackerPlayer.relations[defender.player] = { attitude: 50, hasMet: true };
                 }
+                if (!defenderPlayer.relations[attacker.player]) {
+                    defenderPlayer.relations[attacker.player] = { attitude: 50, hasMet: true };
+                }
+
+                // Decrease reputation for both players
                 attackerPlayer.relations[defender.player].attitude = Math.max(0, attackerPlayer.relations[defender.player].attitude - 10);
+                defenderPlayer.relations[attacker.player].attitude = Math.max(0, defenderPlayer.relations[attacker.player].attitude - 10);
+
+                // Log reputation change
+                logMessage(`${attackerPlayer.name} and ${defenderPlayer.name}'s relations have worsened!`, null);
             }
 
             attackerPlayer.relations[defender.player].hasMet = true;
