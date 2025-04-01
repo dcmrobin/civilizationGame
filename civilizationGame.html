@@ -1244,8 +1244,8 @@
             }
         }
 
-        // Evaluate the score of a tile based on surrounding resources
-        function evaluateTileScore(x, y) {
+        // Evaluate the score of a tile based on surrounding resources and distance
+        function evaluateTileScore(x, y, aiPlayer) {
             let score = 0;
             const directions = [
                 { dx: 0, dy: -1 }, { dx: 1, dy: 0 },
@@ -1254,15 +1254,35 @@
                 { dx: -1, dy: 1 }, { dx: 1, dy: 1 }
             ];
 
+            // Calculate resource score from surrounding tiles
             for (const dir of directions) {
                 const nx = x + dir.dx;
                 const ny = y + dir.dy;
 
                 if (ny >= 0 && ny < gameState.map.length && nx >= 0 && nx < gameState.map[0].length) {
                     const tile = gameState.map[ny][nx];
-                    score += (tile.food || 0) + (tile.production || 0) + (tile.gold * 2.5 /* prioritize gold */ || 0);
+
+                    // Skip tiles that already have cities
+                    if (!findCityAt(nx, ny)) {
+                        score += (tile.food || 0) + (tile.production || 0) + (tile.gold * 2.5 /* prioritize gold */ || 0);
+                    }
                 }
             }
+
+            // Find the nearest city or unit belonging to the AI
+            let nearestDistance = Infinity;
+            for (const city of aiPlayer.cities) {
+                const distance = Math.abs(city.x - x) + Math.abs(city.y - y);
+                nearestDistance = Math.min(nearestDistance, distance);
+            }
+            for (const unit of aiPlayer.units) {
+                const distance = Math.abs(unit.x - x) + Math.abs(unit.y - y);
+                nearestDistance = Math.min(nearestDistance, distance);
+            }
+
+            // Apply a distance penalty (higher distance reduces the score)
+            const distancePenalty = nearestDistance > 13 ? -Infinity : -nearestDistance * 2; // Ignore tiles beyond range 13
+            score += distancePenalty;
 
             return score;
         }
@@ -1605,7 +1625,7 @@
                         // Settler logic: Find a valid tile to found a city
                         const validTile = expansionOpportunities.find(opportunity =>
                             Math.abs(unit.x - opportunity.x) + Math.abs(unit.y - opportunity.y) <= 1 &&
-                            opportunity.score >= 27 // Minimum score threshold for founding a city
+                            opportunity.score >= 22 // Minimum score threshold for founding a city
                         );
 
                         if (validTile) {
@@ -1730,7 +1750,7 @@
             return threats;
         }
 
-        // Find expansion opportunities
+        // Find expansion opportunities for the AI player
         function findExpansionOpportunities(aiPlayer) {
             const opportunities = [];
 
@@ -1740,8 +1760,10 @@
 
                     // Only consider land tiles that are not already occupied by a city
                     if (tile.name !== 'Ocean' && tile.name !== 'Coast' && !findCityAt(x, y)) {
-                        const score = evaluateTileScore(x, y);
-                        opportunities.push({ x, y, score });
+                        const score = evaluateTileScore(x, y, aiPlayer);
+                        if (score > 0) { // Only include tiles with a positive score
+                            opportunities.push({ x, y, score });
+                        }
                     }
                 }
             }
