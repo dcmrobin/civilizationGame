@@ -161,6 +161,17 @@
         #help-content p, #help-content ul {
             margin: 5px 0;
         }
+        #tile-info {
+            display: none;
+            position: absolute;
+            background-color: #fff;
+            border: 1px solid #999;
+            padding: 5px;
+            font-size: 12px;
+            z-index: 100;
+            pointer-events: none; /* Prevent interfering with mouse events */
+            box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.2);
+        }
     </style>
 </head>
 <body>
@@ -215,6 +226,7 @@
             <button id="help-btn">Help</button>
         </div>
         <div id="map"></div>
+        <div id="tile-info" style="display: none; position: absolute; background-color: #fff; border: 1px solid #999; padding: 5px; font-size: 12px; z-index: 100;"></div>
         
         <div id="diplomacy-panel">
             <h3>Diplomatic Relations</h3>
@@ -611,47 +623,66 @@
                     tileElement.className = `tile ${tile.color}`;
                     tileElement.dataset.x = x;
                     tileElement.dataset.y = y;
-                    
+
+                    // Add hover event to show tile info
+                    tileElement.addEventListener('mouseenter', (e) => showTileInfo(tile, e));
+                    tileElement.addEventListener('mousemove', (e) => moveTileInfo(e));
+                    tileElement.addEventListener('mouseleave', hideTileInfo);
+
                     // Add click event for movement/selection
                     tileElement.addEventListener('click', () => handleTileClick(x, y));
-                    
-                    // Highlight the selected unit's or city's tile
-                    if (
-                        (gameState.selectedUnit &&
-                            gameState.selectedUnit.x === x &&
-                            gameState.selectedUnit.y === y) ||
-                        (gameState.selectedCity &&
-                            gameState.selectedCity.x === x &&
-                            gameState.selectedCity.y === y)
-                    ) {
-                        tileElement.classList.add('selected-tile');
-                    }
-                    
+
                     mapElement.appendChild(tileElement);
-                    
+
                     // Add units and cities
                     const playerUnit = findUnitAt(x, y);
                     const playerCity = findCityAt(x, y);
-                    
+
                     if (playerCity) {
                         const cityElement = document.createElement('div');
                         cityElement.className = `city ${gameState.players[playerCity.player].color}`;
                         cityElement.textContent = playerCity.name[0];
                         tileElement.appendChild(cityElement);
                     }
-                    
+
                     if (playerUnit) {
                         const unitElement = document.createElement('div');
                         unitElement.className = `unit ${gameState.players[playerUnit.player].color}`;
                         unitElement.textContent = playerUnit.type[0];
                         tileElement.appendChild(unitElement);
-                        
+
                         if (playerUnit.player === gameState.currentPlayer && playerUnit.moves > 0) {
                             unitElement.style.boxShadow = '0 0 0 2px white';
                         }
                     }
                 }
             }
+        }
+
+        // Show tile information
+        function showTileInfo(tile, event) {
+            const tileInfo = document.getElementById('tile-info');
+            tileInfo.innerHTML = `
+                <strong>${tile.name}</strong><br>
+                Move Cost: ${tile.moveCost}<br>
+                Food: ${tile.food}<br>
+                Production: ${tile.production}
+            `;
+            tileInfo.style.display = 'block';
+            moveTileInfo(event); // Position the popup
+        }
+
+        // Move the tile information popup with the mouse
+        function moveTileInfo(event) {
+            const tileInfo = document.getElementById('tile-info');
+            tileInfo.style.left = `${event.pageX + 10}px`;
+            tileInfo.style.top = `${event.pageY + 10}px`;
+        }
+
+        // Hide tile information
+        function hideTileInfo() {
+            const tileInfo = document.getElementById('tile-info');
+            tileInfo.style.display = 'none';
         }
 
         // Handle tile clicks
@@ -744,7 +775,7 @@
         }
 
         // Move a unit to a new position
-        function moveUnit(unit, x, y) {
+        /*function moveUnit(unit, x, y) {
             const tile = gameState.map[y][x];
 
             // Check if the unit has enough movement points
@@ -782,6 +813,37 @@
             unit.x = x;
             unit.y = y;
             unit.moves -= tile.moveCost; // Deduct movement points based on tile's moveCost
+
+            renderMap();
+        }*/
+
+        // ^ old movement logic that has attacking in it ^
+
+        function moveUnit(unit, x, y) {
+            const tile = gameState.map[y][x];
+
+            // Check if the unit is already in progress of moving to a tile
+            if (unit.remainingMoves > 0) {
+                logMessage(`${gameState.players[unit.player].name}'s ${unit.type} is still moving to (${unit.targetX}, ${unit.targetY}). ${unit.remainingMoves} turns remaining.`, unit.player);
+                return;
+            }
+
+            // Check if the unit has enough movement points
+            if (unit.moves < tile.moveCost) {
+                // Start movement delay
+                unit.remainingMoves = tile.moveCost - unit.moves + 1; // Add 1 to account for the full moveCost
+                unit.moves = 0; // Use up all movement points for this turn
+                unit.targetX = x; // Store the target tile
+                unit.targetY = y;
+                logMessage(`${gameState.players[unit.player].name}'s ${unit.type} is moving to (${x}, ${y}). ${unit.remainingMoves} turns remaining.`, unit.player);
+                return;
+            }
+
+            // Regular movement
+            unit.x = x;
+            unit.y = y;
+            unit.moves -= tile.moveCost; // Deduct movement points based on tile's moveCost
+            logMessage(`${gameState.players[unit.player].name}'s ${unit.type} moved to (${x}, ${y}).`, unit.player);
 
             renderMap();
         }
@@ -1223,6 +1285,24 @@
             let totalFood = 0;
             let totalFoodConsumption = 0;
 
+            // Reset movement points for all units
+            for (const unit of player.units) {
+                if (unit.remainingMoves > 0) {
+                    // Reduce remainingMoves if the unit is in progress of moving
+                    unit.remainingMoves--;
+                    if (unit.remainingMoves === 0) {
+                        // Complete the movement
+                        unit.x = unit.targetX;
+                        unit.y = unit.targetY;
+                        logMessage(`${player.name}'s ${unit.type} has completed its movement to (${unit.x}, ${unit.y}).`, player.id);
+                    }
+                } else {
+                    // Reset moves if the unit is not in progress of moving
+                    unit.moves = UNIT_TYPES[unit.type].move;
+                }
+                unit.hasAttacked = false; // Reset attack status
+            }
+
             // Reset hasAttacked for all units
             for (const unit of player.units) {
                 unit.hasAttacked = false;
@@ -1263,12 +1343,14 @@
                     city.production += calculateCityProduction(city.x, city.y); // Use production points from surrounding tiles
                     const unitType = UNIT_TYPES[city.currentProduction];
                     if (unitType && city.production >= unitType.cost) {
+
                         const unit = {
                             id: `unit-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, // Unique ID
                             type: city.currentProduction,
                             x: city.x,
                             y: city.y,
                             moves: UNIT_TYPES[city.currentProduction].move,
+                            remainingMoves: 0, // Initialize remainingMoves
                             player: player.id,
                             hasAttacked: false
                         };
@@ -1993,7 +2075,9 @@
                     x,
                     y,
                     moves: unitDef.move,
-                    player: player.id
+                    remainingMoves: 0,
+                    player: player.id,
+                    hasAttacked: false
                 };
 
                 player.units.push(unit);
