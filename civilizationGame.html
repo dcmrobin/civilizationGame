@@ -772,6 +772,8 @@
                 city.health -= attackerStrength;
 
                 logMessage(`${attackerPlayer.name} is attacking ${city.name}!`, attacker.player);
+                attackerPlayer.relations[cityPlayer.player].attitude = Math.max(0, attackerPlayer.relations[cityPlayer.player].attitude - 10);
+                cityPlayer.relations[attackerPlayer.player].attitude = Math.max(0, cityPlayer.relations[attackerPlayer.player].attitude - 20);
 
                 if (city.health <= 0) {
                     logMessage(`${city.name} has been defeated!`, attacker.player);
