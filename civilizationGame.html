@@ -251,14 +251,14 @@
     <script>
         // Game constants
         const TILE_TYPES = {
-            OCEAN: { name: 'Ocean', moveCost: 1, food: 1, production: 0, color: 'ocean' },
-            COAST: { name: 'Coast', moveCost: 1, food: 2, production: 0, color: 'coast' },
-            GRASSLAND: { name: 'Grassland', moveCost: 1, food: 2, production: 1, color: 'grassland' },
-            PLAINS: { name: 'Plains', moveCost: 1, food: 1, production: 0, color: 'plains' },
-            DESERT: { name: 'Desert', moveCost: 2, food: 0, production: 0, color: 'desert' },
-            MOUNTAINS: { name: 'Mountains', moveCost: 3, food: 0, production: 1, color: 'mountains' },
-            SNOW: { name: 'Snow', moveCost: 4, food: 0, production: -1, color: 'snow' },
-            FOREST: { name: 'Forest', moveCost: 2, food: 1, production: 1, color: 'forest' }
+            OCEAN: { name: 'Ocean', moveCost: 1, food: 1, production: 0, gold: 1, color: 'ocean' },
+            COAST: { name: 'Coast', moveCost: 1, food: 2, production: 0, gold: 0, color: 'coast' },
+            GRASSLAND: { name: 'Grassland', moveCost: 1, food: 2, production: 1, gold: 0, color: 'grassland' },
+            PLAINS: { name: 'Plains', moveCost: 1, food: 1, production: 0, gold: 0, color: 'plains' },
+            DESERT: { name: 'Desert', moveCost: 2, food: 0, production: 0, gold: 0, color: 'desert' },
+            MOUNTAINS: { name: 'Mountains', moveCost: 3, food: 0, production: 1, gold: 1, color: 'mountains' },
+            SNOW: { name: 'Snow', moveCost: 4, food: 0, production: -1, gold: 0, color: 'snow' },
+            FOREST: { name: 'Forest', moveCost: 2, food: 1, production: 1, gold: 0, color: 'forest' }
         };
 
         const UNIT_TYPES = {
@@ -666,7 +666,8 @@
                 <strong>${tile.name}</strong><br>
                 Move Cost: ${tile.moveCost}<br>
                 Food: ${tile.food}<br>
-                Production: ${tile.production}
+                Production: ${tile.production}<br>
+                Gold: ${tile.gold}
             `;
             tileInfo.style.display = 'block';
             moveTileInfo(event); // Position the popup
@@ -1135,9 +1136,7 @@
 
                 if (ny >= 0 && ny < gameState.map.length && nx >= 0 && nx < gameState.map[0].length) {
                     const tile = gameState.map[ny][nx];
-                    if (tile.name === 'Mountains') {
-                        gold += Math.round(Math.abs(Math.random() - 1)); // Add 1 gold for mountain tiles- with a bit of randomness
-                    }
+                    gold += tile.gold;
                 }
             }
 
@@ -1243,6 +1242,29 @@
                     relation.tradedThisTurn = false;
                 }
             }
+        }
+
+        // Evaluate the score of a tile based on surrounding resources
+        function evaluateTileScore(x, y) {
+            let score = 0;
+            const directions = [
+                { dx: 0, dy: -1 }, { dx: 1, dy: 0 },
+                { dx: 0, dy: 1 }, { dx: -1, dy: 0 },
+                { dx: -1, dy: -1 }, { dx: 1, dy: -1 },
+                { dx: -1, dy: 1 }, { dx: 1, dy: 1 }
+            ];
+
+            for (const dir of directions) {
+                const nx = x + dir.dx;
+                const ny = y + dir.dy;
+
+                if (ny >= 0 && ny < gameState.map.length && nx >= 0 && nx < gameState.map[0].length) {
+                    const tile = gameState.map[ny][nx];
+                    score += (tile.food || 0) + (tile.production || 0) + (tile.gold * 2.5 /* prioritize gold */ || 0);
+                }
+            }
+
+            return score;
         }
 
         // End the current player's turn
@@ -1582,7 +1604,8 @@
                     if (unit.type === 'SETTLER') {
                         // Settler logic: Find a valid tile to found a city
                         const validTile = expansionOpportunities.find(opportunity =>
-                            Math.abs(unit.x - opportunity.x) + Math.abs(unit.y - opportunity.y) <= 1
+                            Math.abs(unit.x - opportunity.x) + Math.abs(unit.y - opportunity.y) <= 1 &&
+                            opportunity.score >= 27 // Minimum score threshold for founding a city
                         );
 
                         if (validTile) {
@@ -1710,14 +1733,22 @@
         // Find expansion opportunities
         function findExpansionOpportunities(aiPlayer) {
             const opportunities = [];
+
             for (let y = 0; y < gameState.map.length; y++) {
                 for (let x = 0; x < gameState.map[y].length; x++) {
                     const tile = gameState.map[y][x];
+
+                    // Only consider land tiles that are not already occupied by a city
                     if (tile.name !== 'Ocean' && tile.name !== 'Coast' && !findCityAt(x, y)) {
-                        opportunities.push({ x, y });
+                        const score = evaluateTileScore(x, y);
+                        opportunities.push({ x, y, score });
                     }
                 }
             }
+
+            // Sort opportunities by score in descending order
+            opportunities.sort((a, b) => b.score - a.score);
+
             return opportunities;
         }
 
