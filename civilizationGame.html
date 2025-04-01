@@ -782,6 +782,11 @@
             const attackerType = UNIT_TYPES[attacker.type];
             const attackerPlayer = gameState.players[attacker.player];
 
+            if (attacker.hasAttacked) {
+                //logMessage(`${gameState.players[attacker.player].name}'s ${attacker.type} cannot attack again this turn.`, attacker.player);
+                return;
+            }
+
             if (target.health !== undefined) {
                 // Target is a city
                 const city = target;
@@ -820,6 +825,8 @@
                     logMessage(`${city.name} has been defeated!`, attacker.player, city.player);
                     captureOrDestroyCity(attackerPlayer, cityPlayer, city);
                 }
+
+                attacker.hasAttacked = true;
 
                 return;
             }
@@ -889,6 +896,8 @@
                     }
                 }
             }
+
+            attacker.hasAttacked = true;
 
             attackerPlayer.relations[defender.player].hasMet = true;
             defenderPlayer.relations[attacker.player].hasMet = true;
@@ -1144,6 +1153,11 @@
             let totalFood = 0;
             let totalFoodConsumption = 0;
 
+            // Reset hasAttacked for all units
+            for (const unit of player.units) {
+                unit.hasAttacked = false;
+            }
+
             // Calculate total food production from cities
             for (const city of player.cities) {
                 totalFood += city.food;
@@ -1183,7 +1197,8 @@
                             x: city.x,
                             y: city.y,
                             moves: UNIT_TYPES[city.currentProduction].move,
-                            player: player.id
+                            player: player.id,
+                            hasAttacked: false
                         };
 
                         // Try to place the unit on an adjacent tile
