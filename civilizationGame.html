@@ -48,7 +48,7 @@
         .ocean { background-color: #1a6bb3; }
         .coast { background-color: #3a86d4; }
         .grassland { background-color: #6aa84f; }
-        .plains { background-color: #b7b854; }
+        .plains { background-color: #92b854; }
         .desert { background-color: #e3d08b; }
         .mountains { background-color: #999999; }
         .snow { background-color: #ffffff; }
@@ -242,11 +242,11 @@
             OCEAN: { name: 'Ocean', moveCost: 1, food: 1, production: 0, color: 'ocean' },
             COAST: { name: 'Coast', moveCost: 1, food: 2, production: 0, color: 'coast' },
             GRASSLAND: { name: 'Grassland', moveCost: 1, food: 2, production: 1, color: 'grassland' },
-            PLAINS: { name: 'Plains', moveCost: 1, food: 1, production: 2, color: 'plains' },
-            DESERT: { name: 'Desert', moveCost: 2, food: 0, production: 1, color: 'desert' },
-            MOUNTAINS: { name: 'Mountains', moveCost: 3, food: 0, production: 3, color: 'mountains' },
-            SNOW: { name: 'Snow', moveCost: 3, food: 0, production: 3, color: 'snow' },
-            FOREST: { name: 'Forest', moveCost: 2, food: 1, production: 2, color: 'forest' }
+            PLAINS: { name: 'Plains', moveCost: 1, food: 1, production: 0, color: 'plains' },
+            DESERT: { name: 'Desert', moveCost: 2, food: 0, production: 0, color: 'desert' },
+            MOUNTAINS: { name: 'Mountains', moveCost: 3, food: 0, production: 1, color: 'mountains' },// make this have a gold boost
+            SNOW: { name: 'Snow', moveCost: 3, food: 0, production: -1, color: 'snow' },
+            FOREST: { name: 'Forest', moveCost: 2, food: 1, production: 1, color: 'forest' }
         };
 
         const UNIT_TYPES = {
@@ -261,7 +261,7 @@
             POTTERY: { name: 'Pottery', cost: 50, leadsTo: ['WRITING'], description: 'Allows Granary building' },
             WRITING: { name: 'Writing', cost: 80, leadsTo: ['PHILOSOPHY'], description: 'Allows Libraries and diplomatic agreements' },
             PHILOSOPHY: { name: 'Philosophy', cost: 120, leadsTo: ['EDUCATION'], description: 'Increases research output' },
-            ARCHERY: { name: 'Archery', cost: 60, leadsTo: ['MATHEMATICS'], description: 'Allows Archer units' },
+            ARCHERY: { name: 'Archery', cost: 60, leadsTo: ['MATHEMATICS'], description: 'Allows Archer units' },// ranged mechanic maybe
             MATHEMATICS: { name: 'Mathematics', cost: 100, leadsTo: ['PHYSICS'], description: 'Improves city defenses' },
             BRONZE_WORKING: { name: 'Bronze Working', cost: 80, leadsTo: ['IRON_WORKING'], description: 'Allows Spearman units' },
             IRON_WORKING: { name: 'Iron Working', cost: 120, leadsTo: ['STEEL'], description: 'Allows Swordsman units' },
@@ -745,6 +745,14 @@
 
         // Move a unit to a new position
         function moveUnit(unit, x, y) {
+            const tile = gameState.map[y][x];
+
+            // Check if the unit has enough movement points
+            if (unit.moves < tile.moveCost) {
+                logMessage(`${gameState.players[unit.player].name}'s ${unit.type} cannot move to (${x}, ${y}) due to insufficient movement points.`, unit.player);
+                return;
+            }
+
             const otherUnit = findUnitAt(x, y);
             const city = findCityAt(x, y);
 
@@ -761,7 +769,6 @@
                 // Check reputation before attacking the city
                 const relation = unitPlayer.relations[cityPlayer.id];
                 if (relation && relation.attitude >= 40) {
-                    // If relations are neutral or better, avoid attacking
                     logMessage(`${unitPlayer.name}'s ${unit.type} avoided attacking ${city.name} due to good relations.`, unit.player, city.player);
                     return;
                 }
@@ -774,42 +781,7 @@
             // Regular movement
             unit.x = x;
             unit.y = y;
-            unit.moves -= 1;
-
-            if (unit.type === 'SETTLER' && !findCityAt(x, y)) {
-                const player = gameState.players[unit.player];
-                if (player.isHuman) {
-                    // Show city founding prompt immediately
-                    if (confirm(`Found a city at (${x}, ${y})?`)) {
-                        foundCity(unit, x, y);
-                        player.units = player.units.filter(u => u !== unit);
-                        delete gameState.unitDestinations[unit.id]; // Clear any destination
-                        renderMap();
-                        updateUI();
-                        return; // Stop further movement
-                    }
-                } else {
-                    // AI city founding (automatic)
-                    foundCity(unit, x, y);
-                    player.units = player.units.filter(u => u !== unit);
-                    delete gameState.unitDestinations[unit.id];
-                    return;
-                }
-            }
-
-            // Update destination path if exists
-            if (gameState.unitDestinations[unit.id]) {
-                const destination = gameState.unitDestinations[unit.id];
-
-                // Remove completed step from path
-                destination.path = destination.path.slice(1);
-
-                // Remove destination if reached or path empty
-                if ((unit.x === destination.targetX && unit.y === destination.targetY) ||
-                    destination.path.length === 0) {
-                    delete gameState.unitDestinations[unit.id];
-                }
-            }
+            unit.moves -= tile.moveCost; // Deduct movement points based on tile's moveCost
 
             renderMap();
         }
@@ -1060,6 +1032,28 @@
             return food;
         }
 
+        function calculateCityProduction(x, y) {
+            let production = 0;
+            const directions = [
+                { dx: 0, dy: -1 }, { dx: 1, dy: 0 },
+                { dx: 0, dy: 1 }, { dx: -1, dy: 0 },
+                { dx: -1, dy: -1 }, { dx: 1, dy: -1 },
+                { dx: -1, dy: 1 }, { dx: 1, dy: 1 }
+            ];
+
+            for (const dir of directions) {
+                const nx = x + dir.dx;
+                const ny = y + dir.dy;
+
+                if (ny >= 0 && ny < gameState.map.length && nx >= 0 && nx < gameState.map[0].length) {
+                    const tile = gameState.map[ny][nx];
+                    production += tile.production || 0; // Add production from the tile
+                }
+            }
+
+            return production;
+        }
+
         // Generate a city name based on player
         function generateCityName(player) {
             const prefixes = {
@@ -1107,6 +1101,9 @@
             const humanPlayer = gameState.players[0];
             const relation = aiPlayer.relations[humanPlayer.id];
 
+            // Check if trade has already occurred this turn
+            if (relation.tradedThisTurn) return;
+
             // Check if cities are close enough for trade
             const tradeDistance = 5; // Maximum distance for trade
             const canTrade = aiPlayer.cities.some(aiCity =>
@@ -1143,8 +1140,18 @@
                 logMessage(`${humanPlayer.name} accepted a trade with ${aiPlayer.name}. Relations improved!`, aiPlayer.id, humanPlayer.id);
             } else {
                 logMessage(`${humanPlayer.name} declined a trade offer from ${aiPlayer.name}.`, aiPlayer.id, humanPlayer.id);
-                aiPlayer.relations[humanPlayer.id].attitude = Math.min(100, relation.attitude - 10);
-                humanPlayer.relations[aiPlayer.id].attitude = Math.min(100, humanPlayer.relations[aiPlayer.id].attitude - 10);
+            }
+
+            // Mark trade as completed for this turn
+            relation.tradedThisTurn = true;
+        }
+
+        // Reset trade flags at the start of each turn
+        function resetTradeFlags() {
+            for (const player of gameState.players) {
+                for (const relation of Object.values(player.relations)) {
+                    relation.tradedThisTurn = false;
+                }
             }
         }
 
@@ -1223,6 +1230,7 @@
 
             // Calculate total food production from cities
             for (const city of player.cities) {
+                city.food = calculateCityFood(city.x, city.y); // Calculate food based on surrounding tiles
                 totalFood += city.food;
             }
 
@@ -1251,7 +1259,8 @@
             // Process cities
             for (const city of player.cities) {
                 if (city.currentProduction) {
-                    city.production += 2; // Add production points
+                    //city.production += city.food; // Use food as production points
+                    city.production += calculateCityProduction(city.x, city.y); // Use production points from surrounding tiles
                     const unitType = UNIT_TYPES[city.currentProduction];
                     if (unitType && city.production >= unitType.cost) {
                         const unit = {
