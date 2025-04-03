@@ -108,6 +108,9 @@
             padding: 5px 10px;
             cursor: pointer;
         }
+        .tile.attack-range {
+            background-color: rgba(255, 0, 0, 0.5); /* Semi-transparent red */
+        }
         #diplomacy-panel, #city-panel {
             width: 800px;
             padding: 10px;
@@ -197,16 +200,16 @@
                 </ul>
         
                 <h4>Moving Units</h4>
-                <p>Select a unit by clicking on it. Then, right-click on a tile to set a destination. The unit will move toward the destination if it has enough moves.</p>
+                <p>Select a unit by clicking on it. Then, right-click on a tile to set a destination. The unit will move toward the destination once every turn.</p>
         
                 <h4>Combat</h4>
-                <p>Move your units next to enemy units or cities to attack them. Units can only attack once per turn.</p>
+                <p>Move your units in range (the red squares) of other units, and then right-click the unit you want to attack- that unit will keep attacking the selected unit until it is dead or you tell it to do something else. Units can only attack once per turn.</p>
         
                 <h4>Diplomacy</h4>
-                <p>Use the Diplomacy panel to view your relations with other civilizations. You can propose trades to improve relations or gain resources.</p>
+                <p>Use the Diplomacy panel to view your relations with other civilizations. You can propose trades to improve relations or gain resources, but the trade might get declined.</p>
         
                 <h4>City Management</h4>
-                <p>Click on one of your cities to manage it. You can assign production tasks, such as building units or researching technologies.</p>
+                <p>Click on one of your cities to manage it. You can assign production tasks, such as building units.</p>
         
                 <h4>Research</h4>
                 <p>Click the "Technology" button to open the Technology Tree. Select a technology to start researching it. Researching technologies unlocks new units and buildings.</p>
@@ -263,9 +266,9 @@
 
         const UNIT_TYPES = {
             SETTLER: { name: 'Settler', cost: 30, goldCost: 50, strength: 0, move: 1, production: ['CITY'], foodConsumption: 2 },
-            WARRIOR: { name: 'Warrior', cost: 10, goldCost: 30, strength: 20, move: 1, production: ['CITY'], foodConsumption: 1 },
+            WARRIOR: { name: 'Warrior', cost: 10, goldCost: 30, strength: 20, move: 1, range: 1, production: ['CITY'], foodConsumption: 1 },
             ARCHER: { name: 'Archer', cost: 20, goldCost: 40, strength: 10, move: 1, range: 2, production: ['CITY'], requires: 'ARCHERY', foodConsumption: 1 },
-            SPEARMAN: { name: 'Spearman', cost: 20, goldCost: 50, strength: 30, move: 1, production: ['CITY'], requires: 'BRONZE_WORKING', foodConsumption: 1 },
+            SPEARMAN: { name: 'Spearman', cost: 20, goldCost: 50, strength: 30, move: 1, range: 1, production: ['CITY'], requires: 'BRONZE_WORKING', foodConsumption: 1 },
             GALLEY: { name: 'Galley', cost: 30, goldCost: 120, strength: 10, move: 3, production: ['PORT'], naval: true, foodConsumption: 2 }
         };
 
@@ -273,7 +276,7 @@
             POTTERY: { name: 'Pottery', cost: 50, leadsTo: ['WRITING'], description: 'Allows Granary building' },
             WRITING: { name: 'Writing', cost: 80, leadsTo: ['PHILOSOPHY'], description: 'Allows Libraries and diplomatic agreements' },
             PHILOSOPHY: { name: 'Philosophy', cost: 120, leadsTo: ['EDUCATION'], description: 'Increases research output' },
-            ARCHERY: { name: 'Archery', cost: 60, leadsTo: ['MATHEMATICS'], description: 'Allows Archer units' },// ranged mechanic maybe
+            ARCHERY: { name: 'Archery', cost: 60, leadsTo: ['MATHEMATICS'], description: 'Allows Archer units' },
             MATHEMATICS: { name: 'Mathematics', cost: 100, leadsTo: ['PHYSICS'], description: 'Improves city defenses' },
             BRONZE_WORKING: { name: 'Bronze Working', cost: 80, leadsTo: ['IRON_WORKING'], description: 'Allows Spearman units' },
             IRON_WORKING: { name: 'Iron Working', cost: 120, leadsTo: ['STEEL'], description: 'Allows Swordsman units' },
@@ -290,7 +293,8 @@
             selectedUnit: null,
             selectedCity: null,
             technologies: {},
-            unitDestinations: {}
+            unitDestinations: {},
+            highlightedTiles: [] // Track tiles to highlight
         };
 
         // Perlin noise implementation
@@ -428,7 +432,7 @@
 
             // Generate height, temperature, and humidity maps
             const heightMap = generateNoiseMap(width, height, 0.1); // Larger scale for smaller features
-            const temperatureMap = generateNoiseMap(width, height, 0.2); // Random temperature distribution
+            const temperatureMap = generateNoiseMap(width, height, 0.07); // Random temperature distribution
             const humidityMap = generateNoiseMap(width, height, 0.2); // Random humidity distribution
 
             // Smooth the height map for more natural transitions
@@ -448,13 +452,16 @@
                         tileType = TILE_TYPES.OCEAN; // Ocean
                     } else if (heightValue < 0.4) {
                         tileType = TILE_TYPES.COAST; // Coast
-                    } else if (heightValue > 0.7) {
+                    } else if ((heightValue > 0.72 || temperatureValue < 0.25) && heightValue > 0.46 && humidityValue < 0.6) {
                         tileType = TILE_TYPES.SNOW; // Snow
                     } else if (heightValue > 0.65) {
                         tileType = TILE_TYPES.MOUNTAINS; // Mountains
-                    } else if (temperatureValue > 0.7 && humidityValue < 0.3) {
+                        if (humidityValue > 0.65) {
+                            tileType = TILE_TYPES.FOREST; // Forest
+                        }
+                    } else if (temperatureValue > 0.7 && humidityValue < 0.5 || heightValue < 0.44) {
                         tileType = TILE_TYPES.DESERT; // Desert
-                    } else if (humidityValue > 0.7) {
+                    } else if (humidityValue > 0.65) {
                         tileType = TILE_TYPES.FOREST; // Forest
                     } else if (temperatureValue > 0.5) {
                         tileType = TILE_TYPES.PLAINS; // Plains
@@ -657,6 +664,14 @@
                     }
                 }
             }
+
+            // Reapply attack range highlights
+            gameState.highlightedTiles.forEach(({ x, y }) => {
+                const tileElement = document.querySelector(`.tile[data-x="${x}"][data-y="${y}"]`);
+                if (tileElement) {
+                    tileElement.classList.add('attack-range');
+                }
+            });
         }
 
         // Show tile information
@@ -696,6 +711,7 @@
                 // Select the city and show the city panel
                 gameState.selectedCity = city;
                 gameState.selectedUnit = null; // Deselect any selected unit
+                clearAttackRangeHighlights(); // Clear highlights when selecting a city
                 showCityPanel(city);
                 return; // Stop further processing
             }
@@ -716,18 +732,19 @@
                         alert("You cannot found a city here!");
                     }
                 }
-
                 if (gameState.selectedUnit === unit) {
                     // If the unit is already selected, allow setting a destination
                 } else {
                     // Select the unit
                     gameState.selectedUnit = unit;
                     gameState.selectedCity = null; // Deselect any selected city
+                    highlightAttackRange(unit); // Highlight the unit's attack range
                 }
             } else {
                 // Deselect everything if no valid selection
                 gameState.selectedUnit = null;
                 gameState.selectedCity = null;
+                clearAttackRangeHighlights(); // Clear highlights when deselecting
             }
 
             renderMap();
@@ -1095,6 +1112,54 @@
             attacker.hasAttacked = true;
         }
 
+        function highlightAttackRange(unit) {
+            const unitType = UNIT_TYPES[unit.type];
+            if (!unitType.range) return; // Only units with a range can highlight attack range
+
+            const range = unitType.range;
+
+            // Clear any existing highlights
+            clearAttackRangeHighlights();
+
+            // Track highlighted tiles
+            gameState.highlightedTiles = [];
+
+            // Highlight tiles in the four cardinal directions
+            const directions = [
+                { dx: 0, dy: -1 }, // Up
+                { dx: 1, dy: 0 },  // Right
+                { dx: 0, dy: 1 },  // Down
+                { dx: -1, dy: 0 }  // Left
+            ];
+
+            for (const dir of directions) {
+                for (let i = 1; i <= range; i++) {
+                    const nx = unit.x + dir.dx * i;
+                    const ny = unit.y + dir.dy * i;
+
+                    // Check if the tile is within bounds
+                    if (ny < 0 || ny >= gameState.map.length || nx < 0 || nx >= gameState.map[0].length) {
+                        break; // Stop if out of bounds
+                    }
+
+                    gameState.highlightedTiles.push({ x: nx, y: ny }); // Track the tile
+
+                    const tileElement = document.querySelector(`.tile[data-x="${nx}"][data-y="${ny}"]`);
+                    if (tileElement) {
+                        tileElement.classList.add('attack-range'); // Add a class to highlight the tile
+                    }
+                }
+            }
+        }
+
+        function clearAttackRangeHighlights() {
+            const highlightedTiles = document.querySelectorAll('.tile.attack-range');
+            highlightedTiles.forEach(tile => tile.classList.remove('attack-range'));
+
+            // Clear the tracked tiles
+            gameState.highlightedTiles = [];
+        }
+
         function captureOrDestroyCity(attackerPlayer, cityPlayer, city) {
             if (attackerPlayer.isHuman) {
                 const choice = confirm(`Do you want to capture ${city.name}? Click "OK" to capture or "Cancel" to destroy.`);
@@ -1317,6 +1382,8 @@
                 logMessage(`${humanPlayer.name} accepted a trade with ${aiPlayer.name}. Relations improved!`, aiPlayer.id, humanPlayer.id);
             } else {
                 logMessage(`${humanPlayer.name} declined a trade offer from ${aiPlayer.name}.`, aiPlayer.id, humanPlayer.id);
+                humanPlayer.relations[aiPlayerId].attitude = Math.min(100, relation.attitude - 2);
+                aiPlayer.relations[humanPlayer.id].attitude = Math.min(100, aiPlayer.relations[humanPlayer.id].attitude - 2);
             }
 
             // Mark trade as completed for this turn
@@ -1635,6 +1702,7 @@
 
         // Right-click handler for setting destination
         function handleTileRightClick(x, y) {
+            clearAttackRangeHighlights();
             if (gameState.selectedCity) {
                 return; // Do nothing if a city is selected
             }
@@ -2186,8 +2254,8 @@
                 }
             } else {
                 logMessage(`${aiPlayer.name} declined a trade proposal from ${humanPlayer.name}.`, aiPlayerId, humanPlayer.id);
-                humanPlayer.relations[aiPlayerId].attitude = Math.min(100, relation.attitude - 10);
-                aiPlayer.relations[humanPlayer.id].attitude = Math.min(100, aiPlayer.relations[humanPlayer.id].attitude - 10);
+                humanPlayer.relations[aiPlayerId].attitude = Math.min(100, relation.attitude - 2);
+                aiPlayer.relations[humanPlayer.id].attitude = Math.min(100, aiPlayer.relations[humanPlayer.id].attitude - 2);
             }
 
             updateUI();
