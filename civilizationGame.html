@@ -1687,7 +1687,7 @@
                         for (const dir of directions) {
                             const nx = city.x + dir.dx;
                             const ny = city.y + dir.dy;
-                            if (canMoveTo(unit, nx, ny, true) && !findUnitAt(nx, ny)) {
+                            if (canMoveTo(unit, nx, ny, true) && !findUnitAt(nx, ny) && !findCityAt(nx, ny)) {
                                 unit.x = nx;
                                 unit.y = ny;
                                 placed = true;
@@ -2474,33 +2474,6 @@
                 updateUI();
             } else {
                 alert("Not enough gold to start production!");
-            }
-        }
-
-        function buyUnitWithGold(unitType, x, y) {
-            const player = gameState.players[gameState.currentPlayer];
-            const unitDef = UNIT_TYPES[unitType];
-
-            if (player.gold >= unitDef.goldCost) {
-                player.gold -= unitDef.goldCost;
-
-                const unit = {
-                    id: `unit-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, // Unique ID
-                    type: unitType,
-                    x,
-                    y,
-                    moves: unitDef.move,
-                    remainingMoves: 0,
-                    player: player.id,
-                    hasAttacked: false
-                };
-
-                player.units.push(unit);
-                logMessage(`${player.name} bought a ${unitDef.name} for ${unitDef.goldCost} gold!`, player.id);
-                updateUI();
-                renderMap();
-            } else {
-                alert("Not enough gold to buy this unit!");
             }
         }
 
