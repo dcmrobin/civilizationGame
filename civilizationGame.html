@@ -264,7 +264,7 @@
         const UNIT_TYPES = {
             SETTLER: { name: 'Settler', cost: 30, goldCost: 50, strength: 0, move: 1, production: ['CITY'], foodConsumption: 2 },
             WARRIOR: { name: 'Warrior', cost: 10, goldCost: 30, strength: 20, move: 1, production: ['CITY'], foodConsumption: 1 },
-            ARCHER: { name: 'Archer', cost: 20, goldCost: 40, strength: 10, move: 1, production: ['CITY'], requires: 'ARCHERY', foodConsumption: 1 },
+            ARCHER: { name: 'Archer', cost: 20, goldCost: 40, strength: 10, move: 1, range: 2, production: ['CITY'], requires: 'ARCHERY', foodConsumption: 1 },
             SPEARMAN: { name: 'Spearman', cost: 20, goldCost: 50, strength: 30, move: 1, production: ['CITY'], requires: 'BRONZE_WORKING', foodConsumption: 1 },
             GALLEY: { name: 'Galley', cost: 30, goldCost: 120, strength: 10, move: 3, production: ['PORT'], naval: true, foodConsumption: 2 }
         };
@@ -870,6 +870,84 @@
                     delete gameState.unitDestinations[unitId];
                 }
             });
+        }
+
+        function performRangedAttack(attacker, targetX, targetY) {
+            const attackerType = UNIT_TYPES[attacker.type];
+            if (!attackerType.range) return; // Only ranged units can perform ranged attacks
+
+            const distance = Math.abs(attacker.x - targetX) + Math.abs(attacker.y - targetY);
+            if (distance > attackerType.range) {
+                logMessage(`${attacker.type} cannot attack target at (${targetX}, ${targetY}) because it is out of range.`, attacker.player);
+                return;
+            }
+
+            const targetUnit = findUnitAt(targetX, targetY);
+            const targetCity = findCityAt(targetX, targetY);
+
+            if (targetUnit && targetUnit.player !== attacker.player) {
+                // Ranged attack on a unit
+                resolveRangedCombat(attacker, targetUnit);
+            } else if (targetCity && targetCity.player !== attacker.player) {
+                // Ranged attack on a city
+                resolveRangedCombat(attacker, targetCity);
+            } else {
+                logMessage(`${attacker.type} has no valid target at (${targetX}, ${targetY}).`, attacker.player);
+            }
+        }
+
+        function resolveRangedCombat(attacker, target) {
+            const attackerType = UNIT_TYPES[attacker.type];
+            const attackerPlayer = gameState.players[attacker.player];
+
+            if (attacker.hasAttacked) {
+                logMessage(`${attacker.type} has already attacked this turn.`, attacker.player);
+                return; // Prevent multiple attacks in the same turn
+            }
+
+            if (target.health !== undefined) {
+                // Target is a city
+                const city = target;
+                const cityPlayer = gameState.players[city.player];
+
+                const damage = attackerType.strength * (1 + Math.random() * 0.2);
+                city.health -= damage;
+
+                // Set `hasMet` to true for both players
+                attackerPlayer.relations[cityPlayer.id].hasMet = true;
+                cityPlayer.relations[attackerPlayer.id].hasMet = true;
+
+                // Decrease reputation for both players
+                attackerPlayer.relations[cityPlayer.id].attitude = Math.max(0, attackerPlayer.relations[cityPlayer.id].attitude - 10);
+                cityPlayer.relations[attackerPlayer.id].attitude = Math.max(0, cityPlayer.relations[attackerPlayer.id].attitude - 10);
+
+                logMessage(`${attackerPlayer.name}'s ${attacker.type} dealt ${Math.round(damage)} damage to ${city.name}.`, attacker.player, city.player);
+
+                if (city.health <= 0) {
+                    logMessage(`${city.name} has been defeated!`, attacker.player, city.player);
+                    captureOrDestroyCity(attackerPlayer, cityPlayer, city);
+                }
+            } else {
+                // Target is a unit
+                const defender = target;
+                const defenderType = UNIT_TYPES[defender.type];
+                const defenderPlayer = gameState.players[defender.player];
+
+                const damage = attackerType.strength * (1 + Math.random() * 0.2);
+                defenderPlayer.units = defenderPlayer.units.filter(u => u !== defender);
+
+                // Set `hasMet` to true for both players
+                attackerPlayer.relations[defender.player].hasMet = true;
+                defenderPlayer.relations[attacker.player].hasMet = true;
+
+                // Decrease reputation for both players
+                defenderPlayer.relations[attacker.player].attitude = Math.max(0, defenderPlayer.relations[attacker.player].attitude - 10);
+                attackerPlayer.relations[defender.player].attitude = Math.max(0, attackerPlayer.relations[defender.player].attitude - 10);
+
+                logMessage(`${attackerPlayer.name}'s ${attacker.type} defeated ${defenderPlayer.name}'s ${defender.type}.`, attacker.player, defender.player);
+            }
+
+            attacker.hasAttacked = true;
         }
 
         // Resolve combat between a unit and another unit or a city
@@ -1562,21 +1640,37 @@
             }
 
             if (gameState.selectedUnit && gameState.selectedUnit.player === gameState.currentPlayer) {
-                const path = findPath(gameState.selectedUnit.x, gameState.selectedUnit.y, x, y, gameState.selectedUnit);
+                const selectedUnit = gameState.selectedUnit;
+                const unitType = UNIT_TYPES[selectedUnit.type];
 
+                // Check for ranged attack
+                if (unitType.range) {
+                    const targetUnit = findUnitAt(x, y);
+                    const targetCity = findCityAt(x, y);
+
+                    if ((targetUnit && targetUnit.player !== selectedUnit.player) || 
+                        (targetCity && targetCity.player !== selectedUnit.player)) {
+                        // Perform ranged attack if a valid target is found
+                        performRangedAttack(selectedUnit, x, y);
+                        renderMap();
+                        updateUI();
+                        return;
+                    }
+                }
+
+                // Default movement logic if no valid target is found
+                const path = findPath(selectedUnit.x, selectedUnit.y, x, y, selectedUnit);
                 if (path.length > 0) {
-                    // Store destination by unit ID
-                    gameState.unitDestinations[gameState.selectedUnit.id] = {
+                    gameState.unitDestinations[selectedUnit.id] = {
                         targetX: x,
                         targetY: y,
                         path: path
                     };
 
-                    // Move first step if possible
-                    if (gameState.selectedUnit.moves > 0) {
+                    if (selectedUnit.moves > 0) {
                         const nextStep = path[0];
-                        if (canMoveTo(gameState.selectedUnit, nextStep.x, nextStep.y)) {
-                            moveUnit(gameState.selectedUnit, nextStep.x, nextStep.y);
+                        if (canMoveTo(selectedUnit, nextStep.x, nextStep.y)) {
+                            moveUnit(selectedUnit, nextStep.x, nextStep.y);
                         }
                     }
 
@@ -1584,6 +1678,38 @@
                     updateUI();
                 }
             }
+        }
+
+        function findRangedTarget(unit, aiPlayer) {
+            const unitType = UNIT_TYPES[unit.type];
+            if (!unitType.range) return null; // Only ranged units can use this function
+
+            let closestTarget = null;
+            let closestDistance = Infinity;
+
+            // Check for enemy units within range
+            for (const player of gameState.players) {
+                if (player.id !== aiPlayer.id) {
+                    for (const enemyUnit of player.units) {
+                        const distance = Math.abs(unit.x - enemyUnit.x) + Math.abs(unit.y - enemyUnit.y);
+                        if (distance <= unitType.range && distance < closestDistance) {
+                            closestTarget = enemyUnit;
+                            closestDistance = distance;
+                        }
+                    }
+
+                    // Check for enemy cities within range
+                    for (const enemyCity of player.cities) {
+                        const distance = Math.abs(unit.x - enemyCity.x) + Math.abs(unit.y - enemyCity.y);
+                        if (distance <= unitType.range && distance < closestDistance) {
+                            closestTarget = enemyCity;
+                            closestDistance = distance;
+                        }
+                    }
+                }
+            }
+
+            return closestTarget;
         }
 
         function aiTurn(aiPlayer) {
@@ -1665,6 +1791,8 @@
             // 6. Move units
             for (const unit of aiPlayer.units) {
                 if (unit.moves > 0) {
+                    const unitType = UNIT_TYPES[unit.type];
+
                     if (unit.type === 'SETTLER') {
                         // Settler logic: Find a valid tile to found a city
                         const validTile = expansionOpportunities.find(opportunity =>
@@ -1675,6 +1803,15 @@
                         if (validTile) {
                             foundCity(unit, validTile.x, validTile.y);
                             continue;
+                        }
+                    }
+
+                    if (unitType.range) {
+                        // Handle ranged units (e.g., Archer)
+                        const target = findRangedTarget(unit, aiPlayer);
+                        if (target) {
+                            performRangedAttack(unit, target.x, target.y);
+                            continue; // Skip movement if a ranged attack was performed
                         }
                     }
 
