@@ -925,6 +925,13 @@
                 if (city.health <= 0) {
                     logMessage(`${city.name} has been defeated!`, attacker.player, city.player);
                     captureOrDestroyCity(attackerPlayer, cityPlayer, city);
+
+                    // Set the attacker's destination to its current position
+                    gameState.unitDestinations[attacker.id] = {
+                        targetX: attacker.x,
+                        targetY: attacker.y,
+                        path: []
+                    };
                 }
 
                 attacker.hasAttacked = true;
