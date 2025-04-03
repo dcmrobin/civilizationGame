@@ -175,6 +175,26 @@
             pointer-events: none; /* Prevent interfering with mouse events */
             box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.2);
         }
+        #map-container {
+            width: 800px; /* Fixed viewport width */
+            height: 500px; /* Fixed viewport height */
+            overflow: hidden; /* Hide overflow */
+            position: relative;
+            border: 2px solid #333;
+            cursor: grab; /* Indicate draggable area */
+        }
+
+        #map {
+            position: absolute;
+            display: grid;
+            grid-template-columns: repeat(100, 20px); /* Match the larger map size */
+            grid-template-rows: repeat(100, 20px);
+            gap: 1px;
+        }
+
+        #map-container.dragging {
+            cursor: grabbing; /* Change cursor when dragging */
+        }
     </style>
 </head>
 <body>
@@ -194,6 +214,7 @@
         
                 <h4>Basic Controls</h4>
                 <ul>
+                    <p>Pan around the map using the middle mouse button and dragging.</p>
                     <li><strong>End Turn:</strong> Click the "End Turn" button to finish your turn and let other players (AI) take their turns.</li>
                     <li><strong>Diplomacy:</strong> Click the "Diplomacy" button to view your relations with other civilizations and propose trades.</li>
                     <li><strong>Technology:</strong> Click the "Technology" button to research new technologies.</li>
@@ -228,7 +249,9 @@
             <button id="tech-btn">Technology</button>
             <button id="help-btn">Help</button>
         </div>
-        <div id="map"></div>
+        <div id="map-container">
+            <div id="map"></div>
+        </div>
         <div id="tile-info" style="display: none; position: absolute; background-color: #fff; border: 1px solid #999; padding: 5px; font-size: 12px; z-index: 100;"></div>
         
         <div id="diplomacy-panel">
@@ -349,6 +372,34 @@
             document.getElementById('help-panel').style.display = 'none';
         }
 
+        function centerViewportOnPlayer() {
+            const humanPlayer = gameState.players[0]; // Assuming the human player is always the first player
+            let targetX = 0;
+            let targetY = 0;
+
+            // Find the first city or unit of the human player
+            if (humanPlayer.cities.length > 0) {
+                targetX = humanPlayer.cities[0].x;
+                targetY = humanPlayer.cities[0].y;
+            } else if (humanPlayer.units.length > 0) {
+                targetX = humanPlayer.units[0].x;
+                targetY = humanPlayer.units[0].y;
+            }
+
+            // Calculate the scroll position to center the viewport
+            const tileSize = 20; // Assuming each tile is 20px
+            const viewportWidth = document.getElementById('map-container').offsetWidth;
+            const viewportHeight = document.getElementById('map-container').offsetHeight;
+
+            const scrollLeft = targetX * tileSize - viewportWidth / 2 + tileSize / 2;
+            const scrollTop = targetY * tileSize - viewportHeight / 2 + tileSize / 2;
+
+            // Scroll the map-container
+            const mapContainer = document.getElementById('map-container');
+            mapContainer.scrollLeft = Math.max(0, scrollLeft);
+            mapContainer.scrollTop = Math.max(0, scrollTop);
+        }
+
         // Initialize the game
         function initGame() {
             createMap();
@@ -356,6 +407,9 @@
             placePlayers();
             renderMap();
             updateUI();
+
+            // Center the viewport on the human player
+            centerViewportOnPlayer();
             
             // Set up event listeners
             document.getElementById('end-turn-btn').addEventListener('click', endTurn);
@@ -375,6 +429,44 @@
                     handleTileRightClick(x, y);
                 }
                 return false;
+            });
+
+            let isPanning = false;
+            let startX, startY, scrollLeft, scrollTop;
+
+            const mapContainer = document.getElementById('map-container');
+
+            mapContainer.addEventListener('mousedown', (e) => {
+                if (e.button === 1) { // Middle mouse button
+                    e.preventDefault(); // Prevent default middle mouse behavior
+                    isPanning = true;
+                    mapContainer.classList.add('dragging');
+                    startX = e.pageX - mapContainer.offsetLeft;
+                    startY = e.pageY - mapContainer.offsetTop;
+                    scrollLeft = mapContainer.scrollLeft;
+                    scrollTop = mapContainer.scrollTop;
+                }
+            });
+
+            mapContainer.addEventListener('mousemove', (e) => {
+                if (!isPanning) return;
+                e.preventDefault();
+                const x = e.pageX - mapContainer.offsetLeft;
+                const y = e.pageY - mapContainer.offsetTop;
+                const walkX = (x - startX) * 1; // Adjust the multiplier for sensitivity
+                const walkY = (y - startY) * 1;
+                mapContainer.scrollLeft = scrollLeft - walkX;
+                mapContainer.scrollTop = scrollTop - walkY;
+            });
+
+            mapContainer.addEventListener('mouseup', () => {
+                isPanning = false;
+                mapContainer.classList.remove('dragging');
+            });
+
+            mapContainer.addEventListener('mouseleave', () => {
+                isPanning = false;
+                mapContainer.classList.remove('dragging');
             });
         }
 
@@ -427,13 +519,13 @@
 
         // Create the game map
         function createMap() {
-            const width = 40; // Map width
-            const height = 25; // Map height
+            const width = 100; // Larger map width
+            const height = 100; // Larger map height
 
             // Generate height, temperature, and humidity maps
-            const heightMap = generateNoiseMap(width, height, 0.1); // Larger scale for smaller features
-            const temperatureMap = generateNoiseMap(width, height, 0.07); // Random temperature distribution
-            const humidityMap = generateNoiseMap(width, height, 0.2); // Random humidity distribution
+            const heightMap = generateNoiseMap(width, height, 0.1);
+            const temperatureMap = generateNoiseMap(width, height, 0.07);
+            const humidityMap = generateNoiseMap(width, height, 0.2);
 
             // Smooth the height map for more natural transitions
             const smoothedHeightMap = smoothMap(heightMap, width, height);
@@ -449,24 +541,24 @@
                     // Determine tile type based on height, temperature, and humidity
                     let tileType;
                     if (heightValue < 0.34) {
-                        tileType = TILE_TYPES.OCEAN; // Ocean
+                        tileType = TILE_TYPES.OCEAN;
                     } else if (heightValue < 0.4) {
-                        tileType = TILE_TYPES.COAST; // Coast
+                        tileType = TILE_TYPES.COAST;
                     } else if ((heightValue > 0.72 || temperatureValue < 0.25) && heightValue > 0.46 && humidityValue < 0.6) {
-                        tileType = TILE_TYPES.SNOW; // Snow
+                        tileType = TILE_TYPES.SNOW;
                     } else if (heightValue > 0.65) {
-                        tileType = TILE_TYPES.MOUNTAINS; // Mountains
+                        tileType = TILE_TYPES.MOUNTAINS;
                         if (humidityValue > 0.65) {
-                            tileType = TILE_TYPES.FOREST; // Forest
+                            tileType = TILE_TYPES.FOREST;
                         }
                     } else if (temperatureValue > 0.7 && humidityValue < 0.5 || heightValue < 0.44) {
-                        tileType = TILE_TYPES.DESERT; // Desert
+                        tileType = TILE_TYPES.DESERT;
                     } else if (humidityValue > 0.65) {
-                        tileType = TILE_TYPES.FOREST; // Forest
+                        tileType = TILE_TYPES.FOREST;
                     } else if (temperatureValue > 0.5) {
-                        tileType = TILE_TYPES.PLAINS; // Plains
+                        tileType = TILE_TYPES.PLAINS;
                     } else {
-                        tileType = TILE_TYPES.GRASSLAND; // Grassland
+                        tileType = TILE_TYPES.GRASSLAND;
                     }
 
                     gameState.map[y][x] = { ...tileType, x, y };
