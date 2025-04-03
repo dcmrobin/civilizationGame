@@ -187,8 +187,8 @@
         #map {
             position: absolute;
             display: grid;
-            grid-template-columns: repeat(100, 20px); /* Match the larger map size */
-            grid-template-rows: repeat(100, 20px);
+            grid-template-columns: repeat(70, 20px); /* Match the larger map size */
+            grid-template-rows: repeat(70, 20px);
             gap: 1px;
         }
 
@@ -519,8 +519,9 @@
 
         // Create the game map
         function createMap() {
-            const width = 100; // Larger map width
-            const height = 100; // Larger map height
+            // If you want to change the width and height of the map here, you'll also have to change it up at grid-template-columns and rows in the css bit
+            const width = 70; // Larger map width
+            const height = 70; // Larger map height
 
             // Generate height, temperature, and humidity maps
             const heightMap = generateNoiseMap(width, height, 0.1);
