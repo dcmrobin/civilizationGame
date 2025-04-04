@@ -2229,30 +2229,42 @@
                 return;
             }
 
-            const goldOffered = Math.floor(Math.random() * 20) + 10;
-            const reputationBoost = Math.floor(Math.random() * 5) + 5;
+            // Prompt the player for the amount of gold to trade
+            const goldOffered = parseInt(prompt(`How much gold do you want to offer to ${aiPlayer.name}?`, "10"), 10);
 
-            const tradeChance = relation.attitude / 100;
-            const aiAccepts = Math.random() < tradeChance;
+            // Validate the input
+            if (isNaN(goldOffered) || goldOffered <= 0) {
+                alert("Invalid amount of gold.");
+                return;
+            }
+
+            if (humanPlayer.gold < goldOffered) {
+                alert("You don't have enough gold to propose this trade.");
+                return;
+            }
+
+            // Calculate reputation gain based on the gold offered
+            const reputationBoost = Math.floor(goldOffered / 1.5);
+
+            // AI will only decline if their reputation is below 15
+            const aiAccepts = relation.attitude >= 15;
 
             humanPlayer.relations[aiPlayerId].hasMet = true;
             aiPlayer.relations[humanPlayer.id].hasMet = true;
 
             if (aiAccepts) {
-                if (humanPlayer.gold >= goldOffered) {
-                    humanPlayer.gold -= goldOffered;
-                    aiPlayer.gold += goldOffered;
-                    humanPlayer.relations[aiPlayerId].attitude = Math.min(100, relation.attitude + reputationBoost);
-                    aiPlayer.relations[humanPlayer.id].attitude = Math.min(100, aiPlayer.relations[humanPlayer.id].attitude + reputationBoost);
+                // Deduct gold and update relations
+                humanPlayer.gold -= goldOffered;
+                aiPlayer.gold += goldOffered;
+                humanPlayer.relations[aiPlayerId].attitude = Math.min(100, relation.attitude + reputationBoost);
+                aiPlayer.relations[humanPlayer.id].attitude = Math.min(100, aiPlayer.relations[humanPlayer.id].attitude + reputationBoost);
 
-                    logMessage(`${humanPlayer.name} successfully traded with ${aiPlayer.name}. Relations improved!`, aiPlayerId, humanPlayer.id);
-                } else {
-                    alert("You don't have enough gold to propose this trade.");
-                }
+                logMessage(`${humanPlayer.name} successfully traded ${goldOffered} gold with ${aiPlayer.name}. Relations improved by ${reputationBoost} points!`, aiPlayerId, humanPlayer.id);
             } else {
+                // AI declines the trade
                 logMessage(`${aiPlayer.name} declined a trade proposal from ${humanPlayer.name}.`, aiPlayerId, humanPlayer.id);
-                humanPlayer.relations[aiPlayerId].attitude = Math.min(100, relation.attitude - 2);
-                aiPlayer.relations[humanPlayer.id].attitude = Math.min(100, aiPlayer.relations[humanPlayer.id].attitude - 2);
+                humanPlayer.relations[aiPlayerId].attitude = Math.max(0, relation.attitude - 2);
+                aiPlayer.relations[humanPlayer.id].attitude = Math.max(0, aiPlayer.relations[humanPlayer.id].attitude - 2);
             }
 
             updateUI();
