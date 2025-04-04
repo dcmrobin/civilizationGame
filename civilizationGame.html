@@ -666,27 +666,92 @@
         function placePlayers() {
             const landTiles = [];
 
+            // Collect all valid land tiles
             for (let y = 0; y < gameState.map.length; y++) {
                 for (let x = 0; x < gameState.map[y].length; x++) {
-                    if (gameState.map[y][x].name !== 'Ocean' && gameState.map[y][x].name !== 'Coast') {
+                    const tile = gameState.map[y][x];
+                    if (tile.name !== 'Ocean' && tile.name !== 'Coast') {
                         landTiles.push({ x, y });
                     }
                 }
             }
 
+            // Shuffle the land tiles to randomize placement
             for (let i = landTiles.length - 1; i > 0; i--) {
                 const j = Math.floor(Math.random() * (i + 1));
                 [landTiles[i], landTiles[j]] = [landTiles[j], landTiles[i]];
             }
 
+            // Place a city and a settler for each player
             for (const player of gameState.players) {
                 if (landTiles.length === 0) break;
 
-                const tile = landTiles.pop();
-                foundCity({
+                // Place the city
+                const cityTile = landTiles.pop();
+                const cityName = generateCityName(player);
+                const city = {
+                    name: cityName,
+                    x: cityTile.x,
+                    y: cityTile.y,
                     player: player.id,
-                    type: 'SETTLER'
-                }, tile.x, tile.y);
+                    production: 0,
+                    currentProduction: null,
+                    buildings: [],
+                    health: 100,
+                    food: calculateCityFood(cityTile.x, cityTile.y)
+                };
+                player.cities.push(city);
+
+                // Place the settler next to the city
+                const directions = [
+                    { dx: 0, dy: -1 }, // Up
+                    { dx: 1, dy: 0 },  // Right
+                    { dx: 0, dy: 1 },  // Down
+                    { dx: -1, dy: 0 }, // Left
+                    { dx: -1, dy: -1 }, // Top-left
+                    { dx: 1, dy: -1 },  // Top-right
+                    { dx: -1, dy: 1 },  // Bottom-left
+                    { dx: 1, dy: 1 }    // Bottom-right
+                ];
+
+                let settlerTile = null;
+                for (const dir of directions) {
+                    const nx = cityTile.x + dir.dx;
+                    const ny = cityTile.y + dir.dy;
+
+                    // Check if the tile is valid and available
+                    if (
+                        ny >= 0 && ny < gameState.map.length &&
+                        nx >= 0 && nx < gameState.map[0].length &&
+                        !findCityAt(nx, ny) &&
+                        !findUnitAt(nx, ny) &&
+                        gameState.map[ny][nx].name !== 'Ocean' &&
+                        gameState.map[ny][nx].name !== 'Coast'
+                    ) {
+                        settlerTile = { x: nx, y: ny };
+                        break;
+                    }
+                }
+
+                // If no adjacent tile is available, fall back to a random land tile
+                if (!settlerTile && landTiles.length > 0) {
+                    settlerTile = landTiles.pop();
+                }
+
+                // Place the settler
+                if (settlerTile) {
+                    const settler = {
+                        id: `unit-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                        type: 'SETTLER',
+                        x: settlerTile.x,
+                        y: settlerTile.y,
+                        moves: UNIT_TYPES.SETTLER.move,
+                        remainingMoves: 0,
+                        player: player.id,
+                        hasAttacked: false
+                    };
+                    player.units.push(settler);
+                }
             }
         }
 
