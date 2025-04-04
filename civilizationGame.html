@@ -1010,7 +1010,7 @@
                 const defenderPlayer = gameState.players[otherUnit.player];
                 attackerPlayer.relations[defenderPlayer.id].hasMet = true;
                 defenderPlayer.relations[attackerPlayer.id].hasMet = true;
-                resolveCombat(unit, otherUnit);
+                performRangedAttack(unit, x, y);
                 return;
             }
 
@@ -1020,7 +1020,7 @@
                 const cityPlayer = gameState.players[city.player];
                 attackerPlayer.relations[cityPlayer.id].hasMet = true;
                 cityPlayer.relations[attackerPlayer.id].hasMet = true;
-                resolveCombat(unit, city);
+                performRangedAttack(unit, x, y);
                 return;
             }
 
@@ -2000,12 +2000,6 @@
                         // Check the current tile's score
                         const currentTileScore = evaluateTileScore(unit.x, unit.y, aiPlayer);
 
-                        /*if (currentTileScore >= 18) {
-                            // If the current tile is good enough, found a city
-                            foundCity(unit, unit.x, unit.y);
-                            continue;
-                        }*/
-
                         // Find the best nearby opportunity
                         const validTile = expansionOpportunities.find(opportunity =>
                             Math.abs(unit.x - opportunity.x) + Math.abs(unit.y - opportunity.y) <= 1 &&
@@ -2023,9 +2017,7 @@
                                 const path = findPath(unit.x, unit.y, nextOpportunity.x, nextOpportunity.y, unit);
                                 if (path.length > 0) {
                                     const nextStep = path[0];
-                                    if (unit.moves >= gameState.map[nextStep.y][nextStep.x].moveCost) {
-                                        moveUnit(unit, nextStep.x, nextStep.y);
-                                    }
+                                    moveUnit(unit, nextStep.x, nextStep.y);
                                 }
                             } else {
                                 // No opportunities left, explore the map
@@ -2050,9 +2042,7 @@
                         const path = findPath(unit.x, unit.y, target.x, target.y, unit);
                         if (path.length > 0) {
                             const nextStep = path[0];
-                            if (unit.moves >= gameState.map[nextStep.y][nextStep.x].moveCost) {
-                                moveUnit(unit, nextStep.x, nextStep.y);
-                            }
+                            moveUnit(unit, nextStep.x, nextStep.y);
                         }
                     } else {
                         explore(unit, aiPlayer);
@@ -2095,46 +2085,53 @@
         }
 
         function explore(unit, aiPlayer) {
-            const directions = [
-                { dx: 0, dy: -1 }, { dx: 1, dy: 0 },
-                { dx: 0, dy: 1 }, { dx: -1, dy: 0 }
-            ];
+            const radius = 7; // Exploration radius
+            let targetTile = null;
 
-            let nearestUnexplored = null;
-            let shortestDistance = Infinity;
+            // Pick a random tile within the radius
+            for (let attempts = 0; attempts < 10; attempts++) {
+                const randomX = unit.x + Math.floor(Math.random() * (radius * 2 + 1)) - radius;
+                const randomY = unit.y + Math.floor(Math.random() * (radius * 2 + 1)) - radius;
 
-            for (let y = 0; y < gameState.map.length; y++) {
-                for (let x = 0; x < gameState.map[y].length; x++) {
-                    const tileKey = `${x},${y}`;
-                    if (!aiPlayer.exploredTiles.has(tileKey)) {
-                        const distance = Math.abs(unit.x - x) + Math.abs(unit.y - y);
-                        if (distance < shortestDistance) {
-                            shortestDistance = distance;
-                            nearestUnexplored = { x, y };
-                        }
-                    }
+                // Ensure the tile is within bounds and valid for movement
+                if (
+                    randomY >= 0 && randomY < gameState.map.length &&
+                    randomX >= 0 && randomX < gameState.map[0].length &&
+                    canMoveTo(unit, randomX, randomY, true) &&
+                    !findCityAt(randomX, randomY) &&
+                    !findUnitAt(randomX, randomY)
+                ) {
+                    targetTile = { x: randomX, y: randomY };
+                    break;
                 }
             }
 
-            if (nearestUnexplored) {
-                const path = findPath(unit.x, unit.y, nearestUnexplored.x, nearestUnexplored.y, unit);
+            // If a valid target tile is found, move toward it
+            if (targetTile) {
+                const path = findPath(unit.x, unit.y, targetTile.x, targetTile.y, unit);
                 if (path.length > 0) {
                     const nextStep = path[0];
                     moveUnit(unit, nextStep.x, nextStep.y);
-                }
-            } else {
-                directions.sort(() => Math.random() - 0.5);
-                for (const dir of directions) {
-                    const nx = unit.x + dir.dx;
-                    const ny = unit.y + dir.dy;
-                    if (canMoveTo(unit, nx, ny)) {
-                        moveUnit(unit, nx, ny);
-                        break;
-                    }
+                    return;
                 }
             }
 
-            aiPlayer.exploredTiles.add(`${unit.x},${unit.y}`);
+            // If no valid target is found, move randomly
+            const directions = [
+                { dx: 0, dy: -1 }, // Up
+                { dx: 1, dy: 0 },  // Right
+                { dx: 0, dy: 1 },  // Down
+                { dx: -1, dy: 0 }  // Left
+            ];
+            directions.sort(() => Math.random() - 0.5); // Shuffle directions
+            for (const dir of directions) {
+                const nx = unit.x + dir.dx;
+                const ny = unit.y + dir.dy;
+                if (canMoveTo(unit, nx, ny)) {
+                    moveUnit(unit, nx, ny);
+                    break;
+                }
+            }
         }
 
         function assessThreats(aiPlayer) {
