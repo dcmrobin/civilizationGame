@@ -1973,15 +1973,44 @@
                     const unitType = UNIT_TYPES[unit.type];
 
                     if (unit.type === 'SETTLER') {
+                        // Check the current tile's score
+                        const currentTileScore = evaluateTileScore(unit.x, unit.y, aiPlayer);
+
+                        if (currentTileScore >= 18) {
+                            // If the current tile is good enough, found a city
+                            foundCity(unit, unit.x, unit.y);
+                            continue;
+                        }
+
+                        // Find the best nearby opportunity
                         const validTile = expansionOpportunities.find(opportunity =>
                             Math.abs(unit.x - opportunity.x) + Math.abs(unit.y - opportunity.y) <= 1 &&
-                            opportunity.score >= 20
+                            opportunity.score >= 18
                         );
 
                         if (validTile) {
+                            // Move to the valid tile and found a city
                             foundCity(unit, validTile.x, validTile.y);
                             continue;
+                        } else {
+                            // No valid tile nearby, continue exploring
+                            const nextOpportunity = expansionOpportunities[0];
+                            if (nextOpportunity) {
+                                const path = findPath(unit.x, unit.y, nextOpportunity.x, nextOpportunity.y, unit);
+                                if (path.length > 0) {
+                                    const nextStep = path[0];
+                                    if (unit.moves >= gameState.map[nextStep.y][nextStep.x].moveCost) {
+                                        moveUnit(unit, nextStep.x, nextStep.y);
+                                    }
+                                }
+                            } else {
+                                // No opportunities left, explore the map
+                                explore(unit, aiPlayer);
+                            }
                         }
+
+                        // Ensure the settler does not move again this turn
+                        unit.moves = 0;
                     }
 
                     if (unitType.range) {
@@ -1997,7 +2026,9 @@
                         const path = findPath(unit.x, unit.y, target.x, target.y, unit);
                         if (path.length > 0) {
                             const nextStep = path[0];
-                            moveUnit(unit, nextStep.x, nextStep.y);
+                            if (unit.moves >= gameState.map[nextStep.y][nextStep.x].moveCost) {
+                                moveUnit(unit, nextStep.x, nextStep.y);
+                            }
                         }
                     } else {
                         explore(unit, aiPlayer);
