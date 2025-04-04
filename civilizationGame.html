@@ -6,14 +6,15 @@
     <title>Simple Civilization</title>
     <style>
         .unit {
-            user-select: none; /* Prevent text selection */
-            -webkit-user-select: none; /* For Safari */
-            -moz-user-select: none; /* For Firefox */
-            -ms-user-select: none; /* For IE/Edge */
-            pointer-events: none; /* Make the text non-interactive */
+            user-select: none;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            pointer-events: none;
         }
         .tile {
-            cursor: pointer; /* Show pointer cursor when hovering over tiles */
+            cursor: pointer;
+            position: relative;
         }
         body {
             font-family: Arial, sans-serif;
@@ -27,10 +28,14 @@
             align-items: center;
         }
         #map {
+            position: absolute;
             display: grid;
-            grid-template-columns: repeat(40, 20px);
-            grid-template-rows: repeat(25, 20px);
+            grid-template-columns: repeat(70, 20px);
+            grid-template-rows: repeat(70, 20px);
             gap: 1px;
+            top: 0;
+            left: 0;
+            will-change: transform; /* Improves rendering performance */
             margin-bottom: 20px;
             border: 2px solid #333;
         }
@@ -39,6 +44,7 @@
             height: 20px;
             box-sizing: border-box;
             position: relative;
+            z-index: 1;
         }
         .selected-tile {
             outline: 2px solid yellow;
@@ -68,7 +74,7 @@
             font-weight: bold;
             color: white;
             text-shadow: 1px 1px 1px black;
-            z-index: 2;
+            z-index: 3;
         }
         .city {
             position: absolute;
@@ -78,7 +84,7 @@
             left: 2px;
             background-color: rgba(0,0,0,0.5);
             border: 1px solid white;
-            z-index: 1;
+            z-index: 2;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -109,7 +115,8 @@
             cursor: pointer;
         }
         .tile.attack-range {
-            background-color: rgba(255, 0, 0, 0.5); /* Semi-transparent red */
+            background-color: rgba(255, 0, 0, 0.5);
+            z-index: 1;
         }
         #diplomacy-panel, #city-panel {
             width: 800px;
@@ -172,28 +179,28 @@
             padding: 5px;
             font-size: 12px;
             z-index: 100;
-            pointer-events: none; /* Prevent interfering with mouse events */
+            pointer-events: none;
             box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.2);
         }
         #map-container {
-            width: 800px; /* Fixed viewport width */
-            height: 500px; /* Fixed viewport height */
-            overflow: hidden; /* Hide overflow */
+            width: 800px;
+            height: 500px;
+            overflow: hidden;
             position: relative;
             border: 2px solid #333;
-            cursor: grab; /* Indicate draggable area */
+            cursor: grab;
         }
 
         #map {
             position: absolute;
             display: grid;
-            grid-template-columns: repeat(70, 20px); /* Match the larger map size */
+            grid-template-columns: repeat(70, 20px);
             grid-template-rows: repeat(70, 20px);
             gap: 1px;
         }
 
         #map-container.dragging {
-            cursor: grabbing; /* Change cursor when dragging */
+            cursor: grabbing;
         }
     </style>
 </head>
@@ -317,7 +324,8 @@
             selectedCity: null,
             technologies: {},
             unitDestinations: {},
-            highlightedTiles: [] // Track tiles to highlight
+            highlightedTiles: [],
+            mapDirty: true // Flag to track if map needs re-rendering
         };
 
         // Perlin noise implementation
@@ -373,11 +381,10 @@
         }
 
         function centerViewportOnPlayer() {
-            const humanPlayer = gameState.players[0]; // Assuming the human player is always the first player
+            const humanPlayer = gameState.players[0];
             let targetX = 0;
             let targetY = 0;
 
-            // Find the first city or unit of the human player
             if (humanPlayer.cities.length > 0) {
                 targetX = humanPlayer.cities[0].x;
                 targetY = humanPlayer.cities[0].y;
@@ -386,15 +393,13 @@
                 targetY = humanPlayer.units[0].y;
             }
 
-            // Calculate the scroll position to center the viewport
-            const tileSize = 20; // Assuming each tile is 20px
+            const tileSize = 20;
             const viewportWidth = document.getElementById('map-container').offsetWidth;
             const viewportHeight = document.getElementById('map-container').offsetHeight;
 
             const scrollLeft = targetX * tileSize - viewportWidth / 2 + tileSize / 2;
             const scrollTop = targetY * tileSize - viewportHeight / 2 + tileSize / 2;
 
-            // Scroll the map-container
             const mapContainer = document.getElementById('map-container');
             mapContainer.scrollLeft = Math.max(0, scrollLeft);
             mapContainer.scrollTop = Math.max(0, scrollTop);
@@ -405,10 +410,8 @@
             createMap();
             createPlayers();
             placePlayers();
-            renderMap();
+            renderInitialMap();
             updateUI();
-
-            // Center the viewport on the human player
             centerViewportOnPlayer();
             
             // Set up event listeners
@@ -437,8 +440,8 @@
             const mapContainer = document.getElementById('map-container');
 
             mapContainer.addEventListener('mousedown', (e) => {
-                if (e.button === 1) { // Middle mouse button
-                    e.preventDefault(); // Prevent default middle mouse behavior
+                if (e.button === 1) {
+                    e.preventDefault();
                     isPanning = true;
                     mapContainer.classList.add('dragging');
                     startX = e.pageX - mapContainer.offsetLeft;
@@ -453,7 +456,7 @@
                 e.preventDefault();
                 const x = e.pageX - mapContainer.offsetLeft;
                 const y = e.pageY - mapContainer.offsetTop;
-                const walkX = (x - startX) * 1; // Adjust the multiplier for sensitivity
+                const walkX = (x - startX) * 1;
                 const walkY = (y - startY) * 1;
                 mapContainer.scrollLeft = scrollLeft - walkX;
                 mapContainer.scrollTop = scrollTop - walkY;
@@ -468,32 +471,39 @@
                 isPanning = false;
                 mapContainer.classList.remove('dragging');
             });
+
+            // Add throttled renderMap call on scroll
+            let renderTimeout = null;
+            mapContainer.addEventListener('scroll', () => {
+                if (!renderTimeout) {
+                    renderTimeout = setTimeout(() => {
+                        renderMap();
+                        renderTimeout = null;
+                    }, 100);
+                }
+            });
         }
 
         function logMessage(message, playerId = null, otherPlayerId = null) {
             const currentPlayer = gameState.players[gameState.currentPlayer];
 
-            // Filter messages about other players
             if (playerId !== null && playerId !== currentPlayer.id) {
                 const relationWithPlayer = currentPlayer.relations[playerId];
                 if (!relationWithPlayer || !relationWithPlayer.hasMet) {
-                    return; // Skip logging if the player hasn't met the first player
+                    return;
                 }
             }
 
-            // If the message involves two players (e.g., AI-to-AI interaction), ensure the human player has met both
             if (otherPlayerId !== null && otherPlayerId !== currentPlayer.id) {
                 const relationWithOtherPlayer = currentPlayer.relations[otherPlayerId];
                 if (!relationWithOtherPlayer || !relationWithOtherPlayer.hasMet) {
-                    return; // Skip logging if the player hasn't met the second player
+                    return;
                 }
             }
 
-            // Add the message to the log
             const logContent = document.getElementById('log-content');
             const logEntry = document.createElement('div');
 
-            // Apply color based on the player's team color
             if (playerId !== null) {
                 const player = gameState.players[playerId];
                 logEntry.style.color = getPlayerColor(player.color);
@@ -501,37 +511,30 @@
 
             logEntry.textContent = message;
             logContent.appendChild(logEntry);
-
-            // Scroll to the bottom of the log
             logContent.scrollTop = logContent.scrollHeight;
         }
 
-        // Helper function to get the color for a player's team
         function getPlayerColor(colorClass) {
             const colors = {
-                player1: '#e60000', // Red
-                player2: '#0047ab', // Blue
-                player3: '#ff8c00', // Orange
-                player4: '#9932cc'  // Purple
+                player1: '#e60000',
+                player2: '#0047ab',
+                player3: '#ff8c00',
+                player4: '#9932cc'
             };
-            return colors[colorClass] || '#000000'; // Default to black if colorClass is not found
+            return colors[colorClass] || '#000000';
         }
 
         // Create the game map
         function createMap() {
-            // If you want to change the width and height of the map here, you'll also have to change it up at grid-template-columns and rows in the css bit
-            const width = 70; // Larger map width
-            const height = 70; // Larger map height
+            const width = 70;
+            const height = 70;
 
-            // Generate height, temperature, and humidity maps
             const heightMap = generateNoiseMap(width, height, 0.1);
             const temperatureMap = generateNoiseMap(width, height, 0.07);
             const humidityMap = generateNoiseMap(width, height, 0.2);
 
-            // Smooth the height map for more natural transitions
             const smoothedHeightMap = smoothMap(heightMap, width, height);
 
-            // Create the map based on the generated maps
             for (let y = 0; y < height; y++) {
                 gameState.map[y] = [];
                 for (let x = 0; x < width; x++) {
@@ -539,7 +542,6 @@
                     const temperatureValue = temperatureMap[y][x];
                     const humidityValue = humidityMap[y][x];
 
-                    // Determine tile type based on height, temperature, and humidity
                     let tileType;
                     if (heightValue < 0.34) {
                         tileType = TILE_TYPES.OCEAN;
@@ -567,13 +569,12 @@
             }
         }
 
-        // Generate a noise map for height or humidity
         function generateNoiseMap(width, height, scale) {
             const map = [];
             for (let y = 0; y < height; y++) {
                 map[y] = [];
                 for (let x = 0; x < width; x++) {
-                    map[y][x] = noise(x, y, scale); // Use the new Perlin noise function
+                    map[y][x] = noise(x, y, scale);
                 }
             }
             return map;
@@ -587,13 +588,11 @@
                     let sum = 0;
                     let count = 0;
 
-                    // Iterate over neighboring tiles (including the current tile)
                     for (let dy = -1; dy <= 1; dy++) {
                         for (let dx = -1; dx <= 1; dx++) {
                             const nx = x + dx;
                             const ny = y + dy;
 
-                            // Check if the neighbor is within bounds
                             if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
                                 sum += map[ny][nx];
                                 count++;
@@ -601,28 +600,14 @@
                         }
                     }
 
-                    // Average the values
                     smoothedMap[y][x] = sum / count;
                 }
             }
             return smoothedMap;
         }
 
-        // Generate a temperature map based on latitude and height
-        function generateTemperatureMap(width, height) {
-            const map = [];
-            for (let y = 0; y < height; y++) {
-                map[y] = [];
-                const latitudeFactor = 1 - Math.abs((y / height) - 0.5) * 2; // Closer to equator = warmer
-                for (let x = 0; x < width; x++) {
-                    map[y][x] = latitudeFactor; // Base temperature
-                }
-            }
-            return map;
-        }
-
         function noise(x, y, scale) {
-            return (Perlin.noise(x * scale, y * scale) + 1) / 2; // Normalize to range [0, 1]
+            return (Perlin.noise(x * scale, y * scale) + 1) / 2;
         }
 
         // Create players
@@ -640,11 +625,10 @@
                     color: 'player1',
                     isHuman: true,
                     relations: {},
-                    exploredTiles: new Set() // Track explored tiles
+                    exploredTiles: new Set()
                 }
             ];
 
-            // Add AI players
             const aiColors = ['player2', 'player3', 'player4'];
             const aiNames = ['Rome', 'Greece', 'Egypt'];
 
@@ -661,16 +645,15 @@
                     color: aiColors[i],
                     isHuman: false,
                     relations: {},
-                    exploredTiles: new Set() // Track explored tiles
+                    exploredTiles: new Set()
                 });
             }
 
-            // Initialize relations for all players
             for (const player of gameState.players) {
                 for (const otherPlayer of gameState.players) {
                     if (player.id !== otherPlayer.id) {
                         player.relations[otherPlayer.id] = {
-                            attitude: Math.floor(Math.random() * 20) + 40, // 40-60
+                            attitude: Math.floor(Math.random() * 20) + 40,
                             hasMet: false
                         };
                     }
@@ -682,7 +665,6 @@
         function placePlayers() {
             const landTiles = [];
 
-            // Find all land tiles
             for (let y = 0; y < gameState.map.length; y++) {
                 for (let x = 0; x < gameState.map[y].length; x++) {
                     if (gameState.map[y][x].name !== 'Ocean' && gameState.map[y][x].name !== 'Coast') {
@@ -691,28 +673,91 @@
                 }
             }
 
-            // Shuffle land tiles
             for (let i = landTiles.length - 1; i > 0; i--) {
                 const j = Math.floor(Math.random() * (i + 1));
                 [landTiles[i], landTiles[j]] = [landTiles[j], landTiles[i]];
             }
 
-            // Place cities for each player
             for (const player of gameState.players) {
                 if (landTiles.length === 0) break;
 
                 const tile = landTiles.pop();
-
-                // Create a city for the player
                 foundCity({
                     player: player.id,
-                    type: 'SETTLER' // Dummy unit type for compatibility
+                    type: 'SETTLER'
                 }, tile.x, tile.y);
             }
         }
 
-        // Render the map
+        function cleanupCityReferences(city) {
+            // Remove any production references
+            for (const player of gameState.players) {
+                player.units = player.units.filter(unit => 
+                    !(unit.targetX === city.x && unit.targetY === city.y)
+                );
+                
+                // Clear any unit destinations targeting this city
+                for (const unitId in gameState.unitDestinations) {
+                    const dest = gameState.unitDestinations[unitId];
+                    if (dest.targetX === city.x && dest.targetY === city.y) {
+                        delete gameState.unitDestinations[unitId];
+                    }
+                }
+            }
+        }
+
+        // Optimized renderMap function
         function renderMap() {
+            if (!gameState.mapDirty) return;
+            
+            const mapElement = document.getElementById('map');
+            
+            // Clear only dynamic elements (units and city markers)
+            const dynamicElements = mapElement.querySelectorAll('.unit, .city');
+            dynamicElements.forEach(el => el.remove());
+            
+            // Redraw all cities first
+            for (const player of gameState.players) {
+                for (const city of player.cities) {
+                    const tileElement = document.querySelector(`.tile[data-x="${city.x}"][data-y="${city.y}"]`);
+                    if (tileElement) {
+                        const cityElement = document.createElement('div');
+                        cityElement.className = `city ${player.color}`;
+                        cityElement.textContent = city.name[0];
+                        tileElement.appendChild(cityElement);
+                    }
+                }
+            }
+            
+            // Then redraw all units (so they appear above cities)
+            for (const player of gameState.players) {
+                for (const unit of player.units) {
+                    const tileElement = document.querySelector(`.tile[data-x="${unit.x}"][data-y="${unit.y}"]`);
+                    if (tileElement) {
+                        const unitElement = document.createElement('div');
+                        unitElement.className = `unit ${player.color}`;
+                        unitElement.textContent = unit.type[0];
+                        if (unit.player === gameState.currentPlayer && unit.moves > 0) {
+                            unitElement.style.boxShadow = '0 0 0 2px white';
+                        }
+                        tileElement.appendChild(unitElement);
+                    }
+                }
+            }
+            
+            // Highlight attack ranges
+            gameState.highlightedTiles.forEach(({ x, y }) => {
+                const tileElement = document.querySelector(`.tile[data-x="${x}"][data-y="${y}"]`);
+                if (tileElement) {
+                    tileElement.classList.add('attack-range');
+                }
+            });
+            
+            gameState.mapDirty = false;
+        }
+
+        // Initial map rendering (only called once)
+        function renderInitialMap() {
             const mapElement = document.getElementById('map');
             mapElement.innerHTML = '';
             
@@ -724,47 +769,19 @@
                     tileElement.dataset.x = x;
                     tileElement.dataset.y = y;
 
-                    // Add hover event to show tile info
+                    // Add event listeners
                     tileElement.addEventListener('mouseenter', (e) => showTileInfo(tile, e));
                     tileElement.addEventListener('mousemove', (e) => moveTileInfo(e));
                     tileElement.addEventListener('mouseleave', hideTileInfo);
-
-                    // Add click event for movement/selection
                     tileElement.addEventListener('click', () => handleTileClick(x, y));
 
                     mapElement.appendChild(tileElement);
-
-                    // Add units and cities
-                    const playerUnit = findUnitAt(x, y);
-                    const playerCity = findCityAt(x, y);
-
-                    if (playerCity) {
-                        const cityElement = document.createElement('div');
-                        cityElement.className = `city ${gameState.players[playerCity.player].color}`;
-                        cityElement.textContent = playerCity.name[0];
-                        tileElement.appendChild(cityElement);
-                    }
-
-                    if (playerUnit) {
-                        const unitElement = document.createElement('div');
-                        unitElement.className = `unit ${gameState.players[playerUnit.player].color}`;
-                        unitElement.textContent = playerUnit.type[0];
-                        tileElement.appendChild(unitElement);
-
-                        if (playerUnit.player === gameState.currentPlayer && playerUnit.moves > 0) {
-                            unitElement.style.boxShadow = '0 0 0 2px white';
-                        }
-                    }
                 }
             }
-
-            // Reapply attack range highlights
-            gameState.highlightedTiles.forEach(({ x, y }) => {
-                const tileElement = document.querySelector(`.tile[data-x="${x}"][data-y="${y}"]`);
-                if (tileElement) {
-                    tileElement.classList.add('attack-range');
-                }
-            });
+            
+            // Now render the dynamic elements (units, cities)
+            gameState.mapDirty = true;
+            renderMap();
         }
 
         // Show tile information
@@ -778,7 +795,7 @@
                 Gold: ${tile.gold}
             `;
             tileInfo.style.display = 'block';
-            moveTileInfo(event); // Position the popup
+            moveTileInfo(event);
         }
 
         // Move the tile information popup with the mouse
@@ -797,23 +814,25 @@
         // Handle tile clicks
         function handleTileClick(x, y) {
             const currentPlayer = gameState.players[gameState.currentPlayer];
-
-            // Check if a city exists on the clicked tile
             const city = findCityAt(x, y);
+            
             if (city && city.player === currentPlayer.id) {
-                // Select the city and show the city panel
                 gameState.selectedCity = city;
-                gameState.selectedUnit = null; // Deselect any selected unit
-                clearAttackRangeHighlights(); // Clear highlights when selecting a city
+                gameState.selectedUnit = null;
+                clearAttackRangeHighlights();
                 showCityPanel(city);
-                return; // Stop further processing
+                return;
             }
 
-            // Check if a unit exists on the clicked tile
             const unit = findUnitAt(x, y);
             if (unit && unit.player === currentPlayer.id) {
+                // Prevent map shifting by focusing on the unit's tile
+                const tileElement = document.querySelector(`.tile[data-x="${x}"][data-y="${y}"]`);
+                if (tileElement) {
+                    tileElement.focus({ preventScroll: true }); // Prevent auto-scrolling
+                }
+
                 if (unit.type === 'SETTLER') {
-                    // Allow the settler to found a city
                     const tile = gameState.map[y][x];
                     if (tile.name !== 'Ocean' && tile.name !== 'Coast' && !findCityAt(x, y)) {
                         const confirmCity = confirm("Do you want to found a city here?");
@@ -825,28 +844,23 @@
                         alert("You cannot found a city here!");
                     }
                 }
-                if (gameState.selectedUnit === unit) {
-                    // If the unit is already selected, allow setting a destination
-                } else {
-                    // Select the unit
-                    gameState.selectedUnit = unit;
-                    gameState.selectedCity = null; // Deselect any selected city
-                    highlightAttackRange(unit); // Highlight the unit's attack range
-                }
+                
+                gameState.selectedUnit = unit;
+                gameState.selectedCity = null;
+                highlightAttackRange(unit);
             } else {
-                // Deselect everything if no valid selection
                 gameState.selectedUnit = null;
                 gameState.selectedCity = null;
-                clearAttackRangeHighlights(); // Clear highlights when deselecting
+                clearAttackRangeHighlights();
             }
 
+            gameState.mapDirty = true;
             renderMap();
             updateUI();
         }
 
         // Check if a unit can move to a tile
         function canMoveTo(unit, x, y, ignoreUnits = false) {
-            // Check if tile exists
             if (y < 0 || y >= gameState.map.length || x < 0 || x >= gameState.map[0].length) {
                 return false;
             }
@@ -854,34 +868,27 @@
             const tile = gameState.map[y][x];
             const unitType = UNIT_TYPES[unit.type];
             
-            // Naval movement rules
             if (unitType.naval) {
-                // Galleys can only move on water tiles
                 return (tile.name === 'Ocean' || tile.name === 'Coast');
             } else {
-                // Land units movement rules
                 if (tile.name === 'Ocean') return false;
-                if (tile.name === 'Coast') return (unit.type === 'SETTLER'); // Only settlers can cross coast
+                if (tile.name === 'Coast') return (unit.type === 'SETTLER');
             }
             
-            // If ignoring units (e.g., for pathfinding), skip unit checks
             if (ignoreUnits) {
                 return true;
             }
             
-            // Check if tile is occupied by another unit
             const otherUnit = findUnitAt(x, y);
             if (otherUnit) {
                 if (otherUnit.player !== unit.player) {
-                    // If the other unit belongs to an enemy, check if it can be attacked
                     return canAttack(unit, otherUnit);
                 } else {
-                    // Prevent stacking on friendly units
                     return false;
                 }
             }
             
-            return true; // Tile is valid for movement
+            return true;
         }
 
         // Check if a unit can attack another unit or a city
@@ -889,70 +896,62 @@
             const attackerType = UNIT_TYPES[attacker.type];
 
             if (target.health !== undefined) {
-                // Target is a city
-                return !attackerType.naval; // Only land units can attack cities
+                return !attackerType.naval;
             }
 
             const defenderType = UNIT_TYPES[target.type];
-            if (attackerType.naval && !defenderType.naval) return false; // Naval units can only attack naval units
+            if (attackerType.naval && !defenderType.naval) return false;
 
             return true;
         }
 
         function moveUnit(unit, x, y) {
+            clearAttackRangeHighlights();
+
             const tile = gameState.map[y][x];
 
-            // Check if the unit is already in progress of moving to a tile
             if (unit.remainingMoves > 0) {
-                //logMessage(`${gameState.players[unit.player].name}'s ${unit.type} is still moving to (${unit.targetX}, ${unit.targetY}). ${unit.remainingMoves} turns remaining.`, unit.player);
+                unit.remainingMoves--;
+                if (unit.remainingMoves === 0) {
+                    unit.x = unit.targetX;
+                    unit.y = unit.targetY;
+                }
                 return;
             }
 
-            // Check if the unit has enough movement points
             if (unit.moves < tile.moveCost) {
                 unit.remainingMoves = tile.moveCost - unit.moves + 1;
                 unit.moves = 0;
                 unit.targetX = x;
                 unit.targetY = y;
-                //logMessage(`${gameState.players[unit.player].name}'s ${unit.type} is moving to (${x}, ${y}). ${unit.remainingMoves} turns remaining.`, unit.player);
                 return;
             }
 
-            // Check for combat with another unit
             const otherUnit = findUnitAt(x, y);
             if (otherUnit && otherUnit.player !== unit.player) {
-                // Initialize relations
                 const attackerPlayer = gameState.players[unit.player];
                 const defenderPlayer = gameState.players[otherUnit.player];
                 attackerPlayer.relations[defenderPlayer.id].hasMet = true;
                 defenderPlayer.relations[attackerPlayer.id].hasMet = true;
-
-                // Resolve combat
                 resolveCombat(unit, otherUnit);
                 return;
             }
 
-            // Check for combat with a city
             const city = findCityAt(x, y);
             if (city && city.player !== unit.player) {
                 const attackerPlayer = gameState.players[unit.player];
                 const cityPlayer = gameState.players[city.player];
-
-                // Initialize relations
                 attackerPlayer.relations[cityPlayer.id].hasMet = true;
                 cityPlayer.relations[attackerPlayer.id].hasMet = true;
-
-                // Resolve combat
                 resolveCombat(unit, city);
                 return;
             }
 
-            // Regular movement
             unit.x = x;
             unit.y = y;
             unit.moves -= tile.moveCost;
-            //logMessage(`${gameState.players[unit.player].name}'s ${unit.type} moved to (${x}, ${y}).`, unit.player);
 
+            gameState.mapDirty = true;
             renderMap();
         }
 
@@ -965,8 +964,6 @@
                 if (!unit || unit.moves <= 0) return;
                 
                 const destination = gameState.unitDestinations[unitId];
-                
-                // Recalculate path in case obstacles appeared
                 const newPath = findPath(unit.x, unit.y, destination.targetX, destination.targetY, unit);
                 if (newPath.length === 0) {
                     delete gameState.unitDestinations[unitId];
@@ -984,7 +981,7 @@
 
         function performRangedAttack(attacker, targetX, targetY) {
             const attackerType = UNIT_TYPES[attacker.type];
-            if (!attackerType.range) return; // Only ranged units can perform ranged attacks
+            if (!attackerType.range) return;
 
             const distance = Math.abs(attacker.x - targetX) + Math.abs(attacker.y - targetY);
             if (distance > attackerType.range) {
@@ -996,10 +993,8 @@
             const targetCity = findCityAt(targetX, targetY);
 
             if (targetUnit && targetUnit.player !== attacker.player) {
-                // Ranged attack on a unit
                 resolveRangedCombat(attacker, targetUnit);
             } else if (targetCity && targetCity.player !== attacker.player) {
-                // Ranged attack on a city
                 resolveRangedCombat(attacker, targetCity);
             } else {
                 logMessage(`${attacker.type} has no valid target at (${targetX}, ${targetY}).`, attacker.player);
@@ -1012,22 +1007,19 @@
 
             if (attacker.hasAttacked) {
                 logMessage(`${attacker.type} has already attacked this turn.`, attacker.player);
-                return; // Prevent multiple attacks in the same turn
+                return;
             }
 
             if (target.health !== undefined) {
-                // Target is a city
                 const city = target;
                 const cityPlayer = gameState.players[city.player];
 
                 const damage = attackerType.strength * (1 + Math.random() * 0.2);
                 city.health -= damage;
 
-                // Set `hasMet` to true for both players
                 attackerPlayer.relations[cityPlayer.id].hasMet = true;
                 cityPlayer.relations[attackerPlayer.id].hasMet = true;
 
-                // Decrease reputation for both players
                 attackerPlayer.relations[cityPlayer.id].attitude = Math.max(0, attackerPlayer.relations[cityPlayer.id].attitude - 10);
                 cityPlayer.relations[attackerPlayer.id].attitude = Math.max(0, cityPlayer.relations[attackerPlayer.id].attitude - 10);
 
@@ -1038,19 +1030,15 @@
                     captureOrDestroyCity(attackerPlayer, cityPlayer, city);
                 }
             } else {
-                // Target is a unit
                 const defender = target;
-                const defenderType = UNIT_TYPES[defender.type];
                 const defenderPlayer = gameState.players[defender.player];
 
                 const damage = attackerType.strength * (1 + Math.random() * 0.2);
                 defenderPlayer.units = defenderPlayer.units.filter(u => u !== defender);
 
-                // Set `hasMet` to true for both players
                 attackerPlayer.relations[defender.player].hasMet = true;
                 defenderPlayer.relations[attacker.player].hasMet = true;
 
-                // Decrease reputation for both players
                 defenderPlayer.relations[attacker.player].attitude = Math.max(0, defenderPlayer.relations[attacker.player].attitude - 10);
                 attackerPlayer.relations[defender.player].attitude = Math.max(0, attackerPlayer.relations[defender.player].attitude - 10);
 
@@ -1066,11 +1054,10 @@
             const attackerPlayer = gameState.players[attacker.player];
 
             if (attacker.hasAttacked) {
-                return; // Prevent multiple attacks in the same turn
+                return;
             }
 
             if (target.health !== undefined) {
-                // Target is a city
                 const city = target;
                 const cityPlayer = gameState.players[city.player];
 
@@ -1079,8 +1066,7 @@
 
                 logMessage(`${attackerPlayer.name} is attacking ${city.name}!`, attacker.player, city.player);
 
-                // Ensure relations exist before modifying them
-                if (attackerPlayer.id !== cityPlayer.id) { // Prevent self-hostility
+                if (attackerPlayer.id !== cityPlayer.id) {
                     if (!attackerPlayer.relations[cityPlayer.id]) {
                         attackerPlayer.relations[cityPlayer.id] = { attitude: 50, hasMet: true };
                     }
@@ -1088,20 +1074,16 @@
                         cityPlayer.relations[attackerPlayer.id] = { attitude: 50, hasMet: true };
                     }
 
-                    // Set `hasMet` to true for both players
                     attackerPlayer.relations[cityPlayer.id].hasMet = true;
                     cityPlayer.relations[attackerPlayer.id].hasMet = true;
 
-                    // Decrease reputation for both players
                     attackerPlayer.relations[cityPlayer.id].attitude = Math.max(0, attackerPlayer.relations[cityPlayer.id].attitude - 10);
                     cityPlayer.relations[attackerPlayer.id].attitude = Math.max(0, cityPlayer.relations[attackerPlayer.id].attitude - 10);
                 }
 
-                // Check for allies of the defender
                 for (const ally of gameState.players) {
                     if (ally.id !== cityPlayer.id && ally.relations[cityPlayer.id]?.attitude >= 80) {
-                        // Ally becomes hostile toward the attacker
-                        if (ally.id !== attackerPlayer.id) { // Prevent self-hostility
+                        if (ally.id !== attackerPlayer.id) {
                             ally.relations[attacker.player] = ally.relations[attacker.player] || { attitude: 50, hasMet: true };
                             ally.relations[attacker.player].attitude = Math.max(0, ally.relations[attacker.player].attitude - 40);
 
@@ -1114,7 +1096,6 @@
                     logMessage(`${city.name} has been defeated!`, attacker.player, city.player);
                     captureOrDestroyCity(attackerPlayer, cityPlayer, city);
 
-                    // Set the attacker's destination to its current position
                     gameState.unitDestinations[attacker.id] = {
                         targetX: attacker.x,
                         targetY: attacker.y,
@@ -1126,7 +1107,6 @@
                 return;
             }
 
-            // Target is a unit
             const defender = target;
             const defenderType = UNIT_TYPES[defender.type];
             const defenderPlayer = gameState.players[defender.player];
@@ -1141,7 +1121,7 @@
                 attacker.y = defender.y;
                 attacker.moves = 0;
 
-                if (attackerPlayer.id !== defenderPlayer.id) { // Prevent self-hostility
+                if (attackerPlayer.id !== defenderPlayer.id) {
                     if (!defenderPlayer.relations[attacker.player]) {
                         defenderPlayer.relations[attacker.player] = { attitude: 50, hasMet: true };
                     }
@@ -1149,19 +1129,16 @@
                         attackerPlayer.relations[defender.player] = { attitude: 50, hasMet: true };
                     }
 
-                    // Set `hasMet` to true for both players
                     attackerPlayer.relations[defender.player].hasMet = true;
                     defenderPlayer.relations[attacker.player].hasMet = true;
 
-                    // Decrease reputation for both players
                     defenderPlayer.relations[attacker.player].attitude = Math.max(0, defenderPlayer.relations[attacker.player].attitude - 10);
                     attackerPlayer.relations[defender.player].attitude = Math.max(0, attackerPlayer.relations[defender.player].attitude - 10);
                 }
 
-                // Check for allies of the defender
                 for (const ally of gameState.players) {
                     if (ally.id !== defenderPlayer.id && ally.relations[defenderPlayer.id]?.attitude >= 80) {
-                        if (ally.id !== attackerPlayer.id) { // Prevent self-hostility
+                        if (ally.id !== attackerPlayer.id) {
                             ally.relations[attacker.player] = ally.relations[attacker.player] || { attitude: 50, hasMet: true };
                             ally.relations[attacker.player].attitude = Math.max(0, ally.relations[attacker.player].attitude - 40);
 
@@ -1172,7 +1149,7 @@
             } else {
                 attackerPlayer.units = attackerPlayer.units.filter(u => u !== attacker);
 
-                if (attackerPlayer.id !== defenderPlayer.id) { // Prevent self-hostility
+                if (attackerPlayer.id !== defenderPlayer.id) {
                     if (!attackerPlayer.relations[defender.player]) {
                         attackerPlayer.relations[defender.player] = { attitude: 50, hasMet: true };
                     }
@@ -1180,19 +1157,16 @@
                         defenderPlayer.relations[attacker.player] = { attitude: 50, hasMet: true };
                     }
 
-                    // Set `hasMet` to true for both players
                     attackerPlayer.relations[defender.player].hasMet = true;
                     defenderPlayer.relations[attacker.player].hasMet = true;
 
-                    // Decrease reputation for both players
                     attackerPlayer.relations[defender.player].attitude = Math.max(0, attackerPlayer.relations[defender.player].attitude - 10);
                     defenderPlayer.relations[attacker.player].attitude = Math.max(0, defenderPlayer.relations[attacker.player].attitude - 10);
                 }
 
-                // Check for allies of the defender
                 for (const ally of gameState.players) {
                     if (ally.id !== defenderPlayer.id && ally.relations[defenderPlayer.id]?.attitude >= 80) {
-                        if (ally.id !== attackerPlayer.id) { // Prevent self-hostility
+                        if (ally.id !== attackerPlayer.id) {
                             ally.relations[attacker.player] = ally.relations[attacker.player] || { attitude: 50, hasMet: true };
                             ally.relations[attacker.player].attitude = Math.max(0, ally.relations[attacker.player].attitude - 40);
 
@@ -1207,17 +1181,12 @@
 
         function highlightAttackRange(unit) {
             const unitType = UNIT_TYPES[unit.type];
-            if (!unitType.range) return; // Only units with a range can highlight attack range
+            if (!unitType.range) return;
+
+            clearAttackRangeHighlights(); // Clear any existing highlights first
+            gameState.highlightedTiles = []; // Reset the array
 
             const range = unitType.range;
-
-            // Clear any existing highlights
-            clearAttackRangeHighlights();
-
-            // Track highlighted tiles
-            gameState.highlightedTiles = [];
-
-            // Highlight tiles in the four cardinal directions
             const directions = [
                 { dx: 0, dy: -1 }, // Up
                 { dx: 1, dy: 0 },  // Right
@@ -1230,53 +1199,75 @@
                     const nx = unit.x + dir.dx * i;
                     const ny = unit.y + dir.dy * i;
 
-                    // Check if the tile is within bounds
+                    // Check bounds
                     if (ny < 0 || ny >= gameState.map.length || nx < 0 || nx >= gameState.map[0].length) {
-                        break; // Stop if out of bounds
+                        continue;
                     }
 
-                    gameState.highlightedTiles.push({ x: nx, y: ny }); // Track the tile
-
+                    // Get the tile element carefully
                     const tileElement = document.querySelector(`.tile[data-x="${nx}"][data-y="${ny}"]`);
                     if (tileElement) {
-                        tileElement.classList.add('attack-range'); // Add a class to highlight the tile
+                        // Create a highlight overlay instead of modifying the tile directly
+                        const highlight = document.createElement('div');
+                        highlight.className = 'attack-range-overlay';
+                        highlight.style.position = 'absolute';
+                        highlight.style.width = '100%';
+                        highlight.style.height = '100%';
+                        highlight.style.backgroundColor = 'rgba(255, 0, 0, 0.3)';
+                        highlight.style.pointerEvents = 'none';
+                        highlight.style.zIndex = '2';
+                        
+                        tileElement.appendChild(highlight);
+                        gameState.highlightedTiles.push({ x: nx, y: ny, element: highlight });
                     }
                 }
             }
         }
 
         function clearAttackRangeHighlights() {
-            const highlightedTiles = document.querySelectorAll('.tile.attack-range');
-            highlightedTiles.forEach(tile => tile.classList.remove('attack-range'));
-
-            // Clear the tracked tiles
+            // Remove all highlight overlays
+            const highlights = document.querySelectorAll('.attack-range-overlay');
+            highlights.forEach(highlight => {
+                if (highlight.parentNode) {
+                    highlight.parentNode.removeChild(highlight);
+                }
+            });
+            
+            // Clear the stored highlights
             gameState.highlightedTiles = [];
+            
+            // Also remove any lingering attack-range classes (legacy cleanup)
+            const legacyHighlights = document.querySelectorAll('.tile.attack-range');
+            legacyHighlights.forEach(tile => {
+                tile.classList.remove('attack-range');
+            });
         }
 
         function captureOrDestroyCity(attackerPlayer, cityPlayer, city) {
             if (attackerPlayer.isHuman) {
                 const choice = confirm(`Do you want to capture ${city.name}? Click "OK" to capture or "Cancel" to destroy.`);
-
+                
                 if (choice) {
+                    // Capture the city
                     city.player = attackerPlayer.id;
                     city.health = 100;
                     attackerPlayer.cities.push(city);
                     cityPlayer.cities = cityPlayer.cities.filter(c => c !== city);
-
                     logMessage(`${attackerPlayer.name} has captured ${city.name}!`, attackerPlayer.id, cityPlayer.id);
                 } else {
+                    // Destroy the city
                     cityPlayer.cities = cityPlayer.cities.filter(c => c !== city);
                     logMessage(`${attackerPlayer.name} has destroyed ${city.name}!`, attackerPlayer.id, cityPlayer.id);
                 }
             } else {
+                // AI logic
                 const shouldCapture = Math.random() > 0.3;
-
+                
                 if (shouldCapture) {
                     city.player = attackerPlayer.id;
                     city.health = 100;
                     attackerPlayer.cities.push(city);
                     cityPlayer.cities = cityPlayer.cities.filter(c => c !== city);
-
                     logMessage(`${attackerPlayer.name} has captured ${city.name}!`, attackerPlayer.id, cityPlayer.id);
                 } else {
                     cityPlayer.cities = cityPlayer.cities.filter(c => c !== city);
@@ -1284,8 +1275,17 @@
                 }
             }
 
-            updateUI();
+            // Force immediate map update
+            gameState.mapDirty = true;
+            cleanupCityReferences(city);
             renderMap();
+            updateUI();
+            
+            // Clear any selection that might reference the city
+            if (gameState.selectedCity && (gameState.selectedCity.x === city.x && gameState.selectedCity.y === city.y)) {
+                gameState.selectedCity = null;
+                hideCityPanel();
+            }
         }
 
         // Found a new city
@@ -1301,28 +1301,25 @@
                 production: 0,
                 currentProduction: null,
                 buildings: [],
-                health: 100, // Add health to cities
-                food: calculateCityFood(x, y) // Calculate initial food production
+                health: 100,
+                food: calculateCityFood(x, y)
             };
 
             player.cities.push(city);
-
-            // Remove the settler
             player.units = player.units.filter(u => u !== unit);
 
             logMessage(`${player.name} founded the city of ${city.name}!`, player.id);
 
-            // Update UI
-            updateUI();
+            gameState.mapDirty = true;
             renderMap();
+            updateUI();
         }
 
         function calculateUnitCap(player) {
-            const unitsPerCity = 5; // Each city allows 5 units
+            const unitsPerCity = 5;
             return player.cities.length * unitsPerCity;
         }
 
-        // Calculate food production for a city based on surrounding tiles
         function calculateCityFood(x, y) {
             let food = 0;
             const directions = [
@@ -1338,7 +1335,7 @@
 
                 if (ny >= 0 && ny < gameState.map.length && nx >= 0 && nx < gameState.map[0].length) {
                     const tile = gameState.map[ny][nx];
-                    food += tile.food || 0; // Add food from the tile
+                    food += tile.food || 0;
                 }
             }
 
@@ -1360,7 +1357,7 @@
 
                 if (ny >= 0 && ny < gameState.map.length && nx >= 0 && nx < gameState.map[0].length) {
                     const tile = gameState.map[ny][nx];
-                    production += tile.production || 0; // Add production from the tile
+                    production += tile.production || 0;
                 }
             }
 
@@ -1389,7 +1386,6 @@
             return gold;
         }
 
-        // Generate a city name based on player
         function generateCityName(player) {
             const prefixes = {
                 0: ['New', 'Fort', 'Port', 'San', 'Los'],
@@ -1414,7 +1410,6 @@
             return prefix + suffix;
         }
 
-        // Find unit at coordinates
         function findUnitAt(x, y) {
             for (const player of gameState.players) {
                 const unit = player.units.find(u => u.x === x && u.y === y);
@@ -1423,7 +1418,6 @@
             return null;
         }
 
-        // Find city at coordinates
         function findCityAt(x, y) {
             for (const player of gameState.players) {
                 const city = player.cities.find(c => c.x === x && c.y === y);
@@ -1436,33 +1430,27 @@
             const humanPlayer = gameState.players[0];
             const relation = aiPlayer.relations[humanPlayer.id];
 
-            // Check if trade has already occurred this turn
             if (relation.tradedThisTurn) return;
 
-            // Check if cities are close enough for trade
-            const tradeDistance = 5; // Maximum distance for trade
+            const tradeDistance = 5;
             const canTrade = aiPlayer.cities.some(aiCity =>
                 humanPlayer.cities.some(humanCity =>
                     Math.abs(aiCity.x - humanCity.x) + Math.abs(aiCity.y - humanCity.y) <= tradeDistance
                 )
             );
 
-            if (!canTrade) return; // Skip trade if cities are too far apart
+            if (!canTrade) return;
 
-            // Ensure AI has enough gold to trade
-            const goldOffered = Math.floor(Math.random() * 20) + 10; // Random gold amount
-            if (aiPlayer.gold < goldOffered) return; // Skip trade if AI doesn't have enough gold
+            const goldOffered = Math.floor(Math.random() * 20) + 10;
+            if (aiPlayer.gold < goldOffered) return;
 
-            // Calculate trade probability based on reputation
-            const tradeChance = relation.attitude / 100; // Higher attitude increases the chance
-            if (Math.random() > tradeChance) return; // Skip trade if the random chance fails
+            const tradeChance = relation.attitude / 100;
+            if (Math.random() > tradeChance) return;
 
-            const reputationBoost = Math.floor(Math.random() * 5) + 5; // Random reputation boost
+            const reputationBoost = Math.floor(Math.random() * 5) + 5;
 
-            // Show trade offer to the human player
             const acceptTrade = confirm(`${aiPlayer.name} offers you ${goldOffered} gold in exchange for improving relations by ${reputationBoost} points. Do you accept?`);
 
-            // Set hasMet to true for both players
             aiPlayer.relations[humanPlayer.id].hasMet = true;
             humanPlayer.relations[aiPlayer.id].hasMet = true;
 
@@ -1475,15 +1463,13 @@
                 logMessage(`${humanPlayer.name} accepted a trade with ${aiPlayer.name}. Relations improved!`, aiPlayer.id, humanPlayer.id);
             } else {
                 logMessage(`${humanPlayer.name} declined a trade offer from ${aiPlayer.name}.`, aiPlayer.id, humanPlayer.id);
-                humanPlayer.relations[aiPlayerId].attitude = Math.min(100, relation.attitude - 2);
+                humanPlayer.relations[aiPlayer.id].attitude = Math.min(100, relation.attitude - 2);
                 aiPlayer.relations[humanPlayer.id].attitude = Math.min(100, aiPlayer.relations[humanPlayer.id].attitude - 2);
             }
 
-            // Mark trade as completed for this turn
             relation.tradedThisTurn = true;
         }
 
-        // Reset trade flags at the start of each turn
         function resetTradeFlags() {
             for (const player of gameState.players) {
                 for (const relation of Object.values(player.relations)) {
@@ -1492,7 +1478,6 @@
             }
         }
 
-        // Evaluate the score of a tile based on surrounding resources and distance
         function evaluateTileScore(x, y, aiPlayer) {
             let score = 0;
             const directions = [
@@ -1502,22 +1487,18 @@
                 { dx: -1, dy: 1 }, { dx: 1, dy: 1 }
             ];
 
-            // Calculate resource score from surrounding tiles
             for (const dir of directions) {
                 const nx = x + dir.dx;
                 const ny = y + dir.dy;
 
                 if (ny >= 0 && ny < gameState.map.length && nx >= 0 && nx < gameState.map[0].length) {
                     const tile = gameState.map[ny][nx];
-
-                    // Skip tiles that already have cities
                     if (!findCityAt(nx, ny)) {
-                        score += (tile.food || 0) + (tile.production || 0) + (tile.gold * 3 /* prioritize gold */ || 0);
+                        score += (tile.food || 0) + (tile.production || 0) + (tile.gold * 3 || 0);
                     }
                 }
             }
 
-            // Find the nearest city or unit belonging to the AI
             let nearestDistance = Infinity;
             for (const city of aiPlayer.cities) {
                 const distance = Math.abs(city.x - x) + Math.abs(city.y - y);
@@ -1528,8 +1509,7 @@
                 nearestDistance = Math.min(nearestDistance, distance);
             }
 
-            // Apply a distance penalty (higher distance reduces the score)
-            const distancePenalty = nearestDistance > 13 ? -Infinity : -nearestDistance * 2; // Ignore tiles beyond range 13
+            const distancePenalty = nearestDistance > 13 ? -Infinity : -nearestDistance * 2;
             score += distancePenalty;
 
             return score;
@@ -1537,52 +1517,38 @@
 
         // End the current player's turn
         function endTurn() {
-            // Disable the "End Turn" button
             const endTurnButton = document.getElementById('end-turn-btn');
             endTurnButton.disabled = true;
 
             const currentPlayer = gameState.players[gameState.currentPlayer];
             processQueuedMoves();
-
-            // Process the current player's turn (cities, research, etc.)
             processPlayerTurn(currentPlayer);
 
-            // Move to the next player
             let nextPlayerIndex = (gameState.currentPlayer + 1) % gameState.players.length;
 
-            // Process all AI turns automatically
             const processAITurns = () => {
                 if (nextPlayerIndex !== 0) {
                     gameState.currentPlayer = nextPlayerIndex;
                     const nextPlayer = gameState.players[gameState.currentPlayer];
 
                     if (!nextPlayer.isHuman) {
-                        aiTurn(nextPlayer); // Process AI turn
-                        processPlayerTurn(nextPlayer); // Process AI cities and research
+                        aiTurn(nextPlayer);
+                        processPlayerTurn(nextPlayer);
                     }
 
                     nextPlayerIndex = (gameState.currentPlayer + 1) % gameState.players.length;
-
-                    // Continue processing AI turns
-                    setTimeout(processAITurns, 100); // Add a small delay for smoother UI updates
+                    setTimeout(processAITurns, 100);
                 } else {
-                    // Return to the human player's turn
                     gameState.currentPlayer = 0;
-
-                    // Reset human player's unit moves
                     const humanPlayer = gameState.players[0];
                     for (const unit of humanPlayer.units) {
                         unit.moves = UNIT_TYPES[unit.type].move;
                     }
 
-                    // Increment the turn counter
                     gameState.turn++;
-
-                    // Update the UI and re-render the map
+                    gameState.mapDirty = true;
                     renderMap();
                     updateUI();
-
-                    // Re-enable the "End Turn" button
                     endTurnButton.disabled = false;
                 }
             };
@@ -1603,40 +1569,32 @@
             let totalFood = 0;
             let totalFoodConsumption = 0;
 
-            // Reset movement points for all units
             for (const unit of player.units) {
                 if (unit.remainingMoves > 0) {
-                    // Reduce remainingMoves if the unit is in progress of moving
                     unit.remainingMoves--;
                     if (unit.remainingMoves === 0) {
-                        // Complete the movement
                         unit.x = unit.targetX;
                         unit.y = unit.targetY;
                     }
                 } else {
-                    // Reset moves if the unit is not in progress of moving
                     unit.moves = UNIT_TYPES[unit.type].move;
                 }
-                unit.hasAttacked = false; // Reset attack status
+                unit.hasAttacked = false;
             }
 
-            // Calculate total food production from cities
             for (const city of player.cities) {
-                city.food = calculateCityFood(city.x, city.y); // Calculate food based on surrounding tiles
+                city.food = calculateCityFood(city.x, city.y);
                 totalFood += city.food;
             }
 
-            // Calculate total food consumption from units
             for (const unit of player.units) {
                 totalFoodConsumption += UNIT_TYPES[unit.type].foodConsumption;
             }
 
-            // Check for food shortages
             if (totalFood < totalFoodConsumption) {
                 logMessage(`${player.name} has a food shortage!`, player.id);
                 const foodDeficit = totalFoodConsumption - totalFood;
 
-                // Remove units to balance food deficit
                 for (let i = 0; i < foodDeficit; i++) {
                     if (player.units.length > 0) {
                         const weakestUnit = player.units.reduce((weakest, unit) =>
@@ -1648,37 +1606,32 @@
                 }
             }
 
-            // Calculate gold generation
-            //player.gold = 0; // Reset gold NO
             for (const city of player.cities) {
-                player.gold += 1; // Base gold per city
-                player.gold += calculateCityGold(city.x, city.y); // Add gold from surrounding tiles
+                player.gold += 1;
+                player.gold += calculateCityGold(city.x, city.y);
             }
 
-            // Process cities
             for (const city of player.cities) {
                 if (city.currentProduction) {
                     if (city.production >= 0) {
-                        city.production += calculateCityProduction(city.x, city.y); // Use production points from surrounding tiles
+                        city.production += calculateCityProduction(city.x, city.y);
                     }
                     if (city.production < 0) {
-                        city.production = 0; // Ensure production doesn't go negative
-                        //logMessage("${player.name}'s city ${city.name} has no production available.", player.id);
+                        city.production = 0;
                     }
                     const unitType = UNIT_TYPES[city.currentProduction];
                     if (unitType && city.production >= unitType.cost) {
                         const unit = {
-                            id: `unit-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, // Unique ID
+                            id: `unit-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
                             type: city.currentProduction,
                             x: city.x,
                             y: city.y,
                             moves: UNIT_TYPES[city.currentProduction].move,
-                            remainingMoves: 0, // Initialize remainingMoves
+                            remainingMoves: 0,
                             player: player.id,
                             hasAttacked: false
                         };
 
-                        // Try to place the unit on an adjacent tile
                         const directions = [
                             { dx: 0, dy: -1 }, { dx: 1, dy: 0 },
                             { dx: 0, dy: 1 }, { dx: -1, dy: 0 }
@@ -1695,17 +1648,13 @@
                             }
                         }
 
-                        // If no adjacent tile is available, leave the unit on the city tile
                         player.units.push(unit);
                         city.production = 0;
                         city.currentProduction = null;
-
-                        //logMessage(`${player.name} completed production of a ${unitType.name} in ${city.name}.`, player.id);
                     }
                 }
             }
 
-            // Process research
             if (player.currentResearch) {
                 player.research += 2;
                 const tech = TECH_TREE[player.currentResearch];
@@ -1716,7 +1665,6 @@
                 }
             }
 
-            // Reset unit moves (for AI)
             if (!player.isHuman) {
                 for (const unit of player.units) {
                     unit.moves = UNIT_TYPES[unit.type].move;
@@ -1729,99 +1677,88 @@
                 {
                     x: startX,
                     y: startY,
-                    g: 0, // Cost from start to current node
-                    h: heuristic(startX, startY, targetX, targetY), // Heuristic cost to target
-                    path: [] // Path taken to reach this node
+                    g: 0,
+                    h: heuristic(startX, startY, targetX, targetY),
+                    path: []
                 }
             ];
             const visited = new Set();
             visited.add(`${startX},${startY}`);
 
             while (openSet.length > 0) {
-                // Sort by f = g + h (total cost)
                 openSet.sort((a, b) => (a.g + a.h) - (b.g + b.h));
                 const current = openSet.shift();
 
-                // If the target is reached, return the path
                 if (current.x === targetX && current.y === targetY) {
                     return current.path;
                 }
 
                 const directions = [
-                    { dx: 0, dy: -1 }, // Up
-                    { dx: 1, dy: 0 },  // Right
-                    { dx: 0, dy: 1 },  // Down
-                    { dx: -1, dy: 0 }  // Left
+                    { dx: 0, dy: -1 },
+                    { dx: 1, dy: 0 },
+                    { dx: 0, dy: 1 },
+                    { dx: -1, dy: 0 }
                 ];
 
                 for (const dir of directions) {
                     const nx = current.x + dir.dx;
                     const ny = current.y + dir.dy;
 
-                    // Skip already visited tiles
                     if (visited.has(`${nx},${ny}`)) continue;
-
-                    // Check if the unit can move to the tile
                     if (!canMoveTo(unit, nx, ny, true)) continue;
-
-                    // Skip tiles with cities unless it's the target
                     if (findCityAt(nx, ny) && (nx !== targetX || ny !== targetY)) continue;
-
-                    // Skip tiles with units unless it's the target
                     if (findUnitAt(nx, ny) && (nx !== targetX || ny !== targetY)) continue;
 
                     const tile = gameState.map[ny][nx];
-                    const moveCost = tile.moveCost || 1; // Default moveCost to 1 if not defined
+                    const moveCost = tile.moveCost || 1;
 
                     visited.add(`${nx},${ny}`);
                     openSet.push({
                         x: nx,
                         y: ny,
-                        g: current.g + moveCost, // Add the moveCost of the tile
-                        h: heuristic(nx, ny, targetX, targetY), // Heuristic cost to target
-                        path: [...current.path, { x: nx, y: ny }] // Append the current step to the path
+                        g: current.g + moveCost,
+                        h: heuristic(nx, ny, targetX, targetY),
+                        path: [...current.path, { x: nx, y: ny }]
                     });
                 }
             }
 
-            // Return an empty path if no valid path is found
             return [];
         }
 
-        // Heuristic function for A* (Manhattan distance)
         function heuristic(x1, y1, x2, y2) {
             return Math.abs(x1 - x2) + Math.abs(y1 - y2);
         }
 
-        // Right-click handler for setting destination
         function handleTileRightClick(x, y) {
+            // Clear highlights immediately when starting movement
             clearAttackRangeHighlights();
-            if (gameState.selectedCity) {
-                return; // Do nothing if a city is selected
-            }
+            
+            if (gameState.selectedCity) return;
 
             if (gameState.selectedUnit && gameState.selectedUnit.player === gameState.currentPlayer) {
                 const selectedUnit = gameState.selectedUnit;
                 const unitType = UNIT_TYPES[selectedUnit.type];
 
-                // Check for ranged attack
                 if (unitType.range) {
                     const targetUnit = findUnitAt(x, y);
                     const targetCity = findCityAt(x, y);
 
                     if ((targetUnit && targetUnit.player !== selectedUnit.player) || 
                         (targetCity && targetCity.player !== selectedUnit.player)) {
-                        // Perform ranged attack if a valid target is found
                         performRangedAttack(selectedUnit, x, y);
+                        gameState.mapDirty = true;
                         renderMap();
                         updateUI();
                         return;
                     }
                 }
 
-                // Default movement logic if no valid target is found
                 const path = findPath(selectedUnit.x, selectedUnit.y, x, y, selectedUnit);
                 if (path.length > 0) {
+                    // Clear any remaining highlights
+                    clearAttackRangeHighlights();
+                    
                     gameState.unitDestinations[selectedUnit.id] = {
                         targetX: x,
                         targetY: y,
@@ -1834,21 +1771,20 @@
                             moveUnit(selectedUnit, nextStep.x, nextStep.y);
                         }
                     }
-
-                    renderMap();
-                    updateUI();
                 }
             }
+            gameState.mapDirty = true;
+            renderMap();
+            updateUI();
         }
 
         function findRangedTarget(unit, aiPlayer) {
             const unitType = UNIT_TYPES[unit.type];
-            if (!unitType.range) return null; // Only ranged units can use this function
+            if (!unitType.range) return null;
 
             let closestTarget = null;
             let closestDistance = Infinity;
 
-            // Check for enemy units within range
             for (const player of gameState.players) {
                 if (player.id !== aiPlayer.id) {
                     for (const enemyUnit of player.units) {
@@ -1859,7 +1795,6 @@
                         }
                     }
 
-                    // Check for enemy cities within range
                     for (const enemyCity of player.cities) {
                         const distance = Math.abs(unit.x - enemyCity.x) + Math.abs(unit.y - enemyCity.y);
                         if (distance <= unitType.range && distance < closestDistance) {
@@ -1874,91 +1809,75 @@
         }
 
         function aiTurn(aiPlayer) {
-            // 1. Assess the current situation
             const threats = assessThreats(aiPlayer);
             const expansionOpportunities = findExpansionOpportunities(aiPlayer);
 
-            // 2. Process city production
             for (const city of aiPlayer.cities) {
                 if (!city.currentProduction) {
                     const options = [];
 
-                    // Build settlers if there are expansion opportunities
                     if (expansionOpportunities.length > 0 && Math.random() > 0.3) {
                         options.push('SETTLER');
                     }
 
-                    // Build military units if under threat or relations are hostile
                     if (threats.length > 0 || isHostile(aiPlayer)) {
                         options.push('WARRIOR');
                         if (aiPlayer.researchedTechs.has('ARCHERY')) options.push('ARCHER');
                         if (aiPlayer.researchedTechs.has('BRONZE_WORKING')) options.push('SPEARMAN');
                     }
 
-                    // Default to economic units if no immediate threats
                     if (options.length === 0) {
-                        options.push('WARRIOR'); // Default to warriors for exploration
+                        options.push('WARRIOR');
                     }
 
-                    // Select a unit to produce
                     const selectedUnit = options[Math.floor(Math.random() * options.length)];
                     const unitDef = UNIT_TYPES[selectedUnit];
 
-                    // Check if the AI has enough gold to start production
                     if (aiPlayer.gold >= unitDef.goldCost) {
-                        aiPlayer.gold -= unitDef.goldCost; // Deduct gold
+                        aiPlayer.gold -= unitDef.goldCost;
                         city.currentProduction = selectedUnit;
                         city.production = 0;
                     }
                 }
             }
 
-            // 3. Research prioritization
             if (aiPlayer.currentResearch) {
-                // Progress research
-                aiPlayer.research += 2; // AI research rate (adjust as needed)
+                aiPlayer.research += 2;
                 const tech = TECH_TREE[aiPlayer.currentResearch];
                 if (aiPlayer.research >= tech.cost) {
                     aiPlayer.researchedTechs.add(aiPlayer.currentResearch);
                     logMessage(`${aiPlayer.name} completed research on ${tech.name}.`, aiPlayer.id);
-                    aiPlayer.currentResearch = null; // Clear current research
-                    aiPlayer.research = 0; // Reset research progress
+                    aiPlayer.currentResearch = null;
+                    aiPlayer.research = 0;
                 }
             }
 
-            // Start new research if no current research
             if (!aiPlayer.currentResearch) {
-                // Get available technologies
                 const availableTechs = Object.keys(TECH_TREE).filter(techId =>
                     canResearchTech(aiPlayer, techId)
                 );
 
-                // Randomize research selection
                 if (availableTechs.length > 0) {
                     aiPlayer.currentResearch = prioritizeResearch(aiPlayer, availableTechs);
-                    aiPlayer.research = 0; // Reset research progress
+                    aiPlayer.research = 0;
                     logMessage(`${aiPlayer.name} started researching ${TECH_TREE[aiPlayer.currentResearch].name}.`, aiPlayer.id);
                 }
             }
 
-            // 4. AI-to-Human Trading
             if (!aiPlayer.isHuman) {
                 aiTradeWithPlayer(aiPlayer);
             }
 
-            // 5. AI-to-AI Trading
             aiTradeWithOtherAIs(aiPlayer);
 
-            // 6. Move units
             for (const unit of aiPlayer.units) {
                 if (unit.moves > 0) {
                     const unitType = UNIT_TYPES[unit.type];
 
                     if (unit.type === 'SETTLER') {
-                        // Settler logic: Find a valid tile to found a city
                         const validTile = expansionOpportunities.find(opportunity =>
                             Math.abs(unit.x - opportunity.x) + Math.abs(unit.y - opportunity.y) <= 1 &&
-                            opportunity.score >= 20 // Minimum score threshold for founding a city
+                            opportunity.score >= 20
                         );
 
                         if (validTile) {
@@ -1968,15 +1887,13 @@
                     }
 
                     if (unitType.range) {
-                        // Handle ranged units (e.g., Archer)
                         const target = findRangedTarget(unit, aiPlayer);
                         if (target) {
                             performRangedAttack(unit, target.x, target.y);
-                            continue; // Skip movement if a ranged attack was performed
+                            continue;
                         }
                     }
 
-                    // Default movement logic for other units
                     const target = findBestTarget(unit, aiPlayer, threats, expansionOpportunities);
                     if (target) {
                         const path = findPath(unit.x, unit.y, target.x, target.y, unit);
@@ -1996,28 +1913,24 @@
                 if (otherAI.id !== aiPlayer.id && !otherAI.isHuman) {
                     const relation = aiPlayer.relations[otherAI.id];
 
-                    // Check if cities are close enough for trade
-                    const tradeDistance = 5; // Maximum distance for trade
+                    const tradeDistance = 5;
                     const canTrade = aiPlayer.cities.some(aiCity =>
                         otherAI.cities.some(otherCity =>
                             Math.abs(aiCity.x - otherCity.x) + Math.abs(aiCity.y - otherCity.y) <= tradeDistance
                         )
                     );
 
-                    if (!canTrade) continue; // Skip trade if cities are too far apart
+                    if (!canTrade) continue;
 
-                    // Calculate trade probability based on reputation
-                    const tradeChance = relation.attitude / 100; // Higher attitude increases the chance
-                    if (Math.random() > tradeChance) continue; // Skip trade if the random chance fails
+                    const tradeChance = relation.attitude / 100;
+                    if (Math.random() > tradeChance) continue;
 
-                    const goldOffered = Math.floor(Math.random() * 20) + 10; // Random gold amount
-                    const reputationBoost = Math.floor(Math.random() * 5) + 5; // Random reputation boost
+                    const goldOffered = Math.floor(Math.random() * 20) + 10;
+                    const reputationBoost = Math.floor(Math.random() * 5) + 5;
 
-                    // Set hasMet to true for both players
                     aiPlayer.relations[otherAI.id].hasMet = true;
                     otherAI.relations[aiPlayer.id].hasMet = true;
 
-                    // Execute the trade
                     aiPlayer.gold -= goldOffered;
                     otherAI.gold += goldOffered;
                     aiPlayer.relations[otherAI.id].attitude = Math.min(100, relation.attitude + reputationBoost);
@@ -2034,7 +1947,6 @@
                 { dx: 0, dy: 1 }, { dx: -1, dy: 0 }
             ];
 
-            // Find the nearest unexplored tile
             let nearestUnexplored = null;
             let shortestDistance = Infinity;
 
@@ -2058,7 +1970,6 @@
                     moveUnit(unit, nextStep.x, nextStep.y);
                 }
             } else {
-                // Random movement if no unexplored tiles are found
                 directions.sort(() => Math.random() - 0.5);
                 for (const dir of directions) {
                     const nx = unit.x + dir.dx;
@@ -2070,11 +1981,9 @@
                 }
             }
 
-            // Mark the current tile as explored
             aiPlayer.exploredTiles.add(`${unit.x},${unit.y}`);
         }
 
-        // Assess threats to the AI player
         function assessThreats(aiPlayer) {
             const threats = [];
             for (const player of gameState.players) {
@@ -2092,7 +2001,6 @@
             return threats;
         }
 
-        // Find expansion opportunities for the AI player
         function findExpansionOpportunities(aiPlayer) {
             const opportunities = [];
 
@@ -2100,37 +2008,31 @@
                 for (let x = 0; x < gameState.map[y].length; x++) {
                     const tile = gameState.map[y][x];
 
-                    // Only consider land tiles that are not already occupied by a city
                     if (tile.name !== 'Ocean' && tile.name !== 'Coast' && !findCityAt(x, y)) {
                         const score = evaluateTileScore(x, y, aiPlayer);
-                        if (score > 0) { // Only include tiles with a positive score
+                        if (score > 0) {
                             opportunities.push({ x, y, score });
                         }
                     }
                 }
             }
 
-            // Sort opportunities by score in descending order
             opportunities.sort((a, b) => b.score - a.score);
 
             return opportunities;
         }
 
-        // Check if the AI has hostile relations
         function isHostile(aiPlayer) {
             return Object.values(aiPlayer.relations).some(rel => rel.attitude < 40);
         }
 
-        // Find the best target for a unit
         function findBestTarget(unit, aiPlayer, threats, expansionOpportunities) {
-            // Prioritize threats
             if (threats.length > 0) {
                 return threats.reduce((closest, threat) =>
                     threat.distance < closest.distance ? threat : closest
                 ).unit;
             }
 
-            // Prioritize attacking hostile players
             const hostilePlayers = gameState.players.filter(player =>
                 player.id !== aiPlayer.id && aiPlayer.relations[player.id]?.attitude < 40
             );
@@ -2140,7 +2042,6 @@
                 let closestDistance = Infinity;
 
                 for (const hostilePlayer of hostilePlayers) {
-                    // Check units
                     for (const enemyUnit of hostilePlayer.units) {
                         const dist = Math.abs(unit.x - enemyUnit.x) + Math.abs(unit.y - enemyUnit.y);
                         if (dist < closestDistance && canAttack(unit, enemyUnit)) {
@@ -2149,7 +2050,6 @@
                         }
                     }
 
-                    // Check cities
                     for (const enemyCity of hostilePlayer.cities) {
                         const dist = Math.abs(unit.x - enemyCity.x) + Math.abs(unit.y - enemyCity.y);
                         if (dist < closestDistance) {
@@ -2162,36 +2062,14 @@
                 if (closestTarget) return closestTarget;
             }
 
-            // Prioritize expansion
             if (unit.type === 'SETTLER' && expansionOpportunities.length > 0) {
-                return expansionOpportunities[0]; // Pick the first opportunity
+                return expansionOpportunities[0];
             }
 
-            // Default to exploring
             return null;
         }
 
-        // Explore the map
-        function explore(unit) {
-            const directions = [
-                { dx: 0, dy: -1 }, { dx: 1, dy: 0 },
-                { dx: 0, dy: 1 }, { dx: -1, dy: 0 }
-            ];
-            directions.sort(() => Math.random() - 0.5);
-
-            for (const dir of directions) {
-                const nx = unit.x + dir.dx;
-                const ny = unit.y + dir.dy;
-                if (canMoveTo(unit, nx, ny)) {
-                    moveUnit(unit, nx, ny);
-                    break;
-                }
-            }
-        }
-
-        // Helper function to prioritize research
         function prioritizeResearch(aiPlayer, availableTechs) {
-            // Example: Prioritize military techs if relations are hostile
             const hostileRelations = Object.values(aiPlayer.relations).some(rel => rel.attitude < 40);
             if (hostileRelations) {
                 const militaryTechs = availableTechs.filter(tech =>
@@ -2202,7 +2080,6 @@
                 }
             }
 
-            // Otherwise, prioritize expansion or economy
             const expansionTechs = availableTechs.filter(tech =>
                 ['POTTERY', 'WRITING'].includes(tech)
             );
@@ -2210,18 +2087,15 @@
                 return expansionTechs[Math.floor(Math.random() * expansionTechs.length)];
             }
 
-            // Default to random tech
             return availableTechs[Math.floor(Math.random() * availableTechs.length)];
         }
 
-        // Helper function to find the nearest target
         function findNearestTarget(unit, aiPlayer) {
             let closestTarget = null;
             let closestDistance = Infinity;
 
             for (const player of gameState.players) {
                 if (player.id !== aiPlayer.id && aiPlayer.relations[player.id].hasMet) {
-                    // Check units
                     for (const enemyUnit of player.units) {
                         const dist = Math.abs(unit.x - enemyUnit.x) + Math.abs(unit.y - enemyUnit.y);
                         if (dist < closestDistance && canAttack(unit, enemyUnit)) {
@@ -2230,7 +2104,6 @@
                         }
                     }
 
-                    // Check cities
                     for (const enemyCity of player.cities) {
                         const dist = Math.abs(unit.x - enemyCity.x) + Math.abs(unit.y - enemyCity.y);
                         if (dist < closestDistance) {
@@ -2248,7 +2121,6 @@
         function updateUI() {
             const currentPlayer = gameState.players[gameState.currentPlayer];
             
-            // Update turn and resources
             document.getElementById('turn-counter').textContent = gameState.turn;
             document.getElementById('gold-counter').textContent = currentPlayer.gold;
             document.getElementById('research-counter').textContent = currentPlayer.research;
@@ -2262,7 +2134,6 @@
                 document.getElementById('current-tech').textContent = 'None';
             }
             
-            // Update diplomacy panel if open
             if (document.getElementById('diplomacy-panel').style.display === 'block') {
                 showDiplomacy();
             }
@@ -2309,8 +2180,7 @@
             const aiPlayer = gameState.players[aiPlayerId];
             const relation = humanPlayer.relations[aiPlayerId];
 
-            // Check if cities are close enough for trade
-            const tradeDistance = 5; // Maximum distance for trade
+            const tradeDistance = 5;
             const canTrade = humanPlayer.cities.some(humanCity =>
                 aiPlayer.cities.some(aiCity =>
                     Math.abs(humanCity.x - aiCity.x) + Math.abs(humanCity.y - aiCity.y) <= tradeDistance
@@ -2322,15 +2192,12 @@
                 return;
             }
 
-            // Propose a trade
-            const goldOffered = Math.floor(Math.random() * 20) + 10; // Random gold amount
-            const reputationBoost = Math.floor(Math.random() * 5) + 5; // Random reputation boost
+            const goldOffered = Math.floor(Math.random() * 20) + 10;
+            const reputationBoost = Math.floor(Math.random() * 5) + 5;
 
-            // AI decides whether to accept the trade based on reputation
-            const tradeChance = relation.attitude / 100; // Higher attitude increases the chance
+            const tradeChance = relation.attitude / 100;
             const aiAccepts = Math.random() < tradeChance;
 
-            // Set hasMet to true for both players
             humanPlayer.relations[aiPlayerId].hasMet = true;
             aiPlayer.relations[humanPlayer.id].hasMet = true;
 
@@ -2354,7 +2221,6 @@
             updateUI();
         }
 
-        // Get relation text based on attitude
         function getRelationText(attitude) {
             if (attitude >= 80) return 'Allied';
             if (attitude >= 60) return 'Friendly';
@@ -2363,12 +2229,10 @@
             return 'Hostile';
         }
 
-        // Hide diplomacy panel
         function hideDiplomacy() {
             document.getElementById('diplomacy-panel').style.display = 'none';
         }
 
-        // Show technology tree
         function showTechTree() {
             const currentPlayer = gameState.players[gameState.currentPlayer];
             const techTreeElement = document.getElementById('tech-tree');
@@ -2396,24 +2260,20 @@
             document.getElementById('tech-panel').style.display = 'block';
         }
 
-        // Check if a player can research a tech
         function canResearchTech(player, techId) {
             if (player.researchedTechs.has(techId)) return false;
             
             const tech = TECH_TREE[techId];
-            // Check if any prerequisite techs are researched
             for (const [otherTechId, otherTech] of Object.entries(TECH_TREE)) {
                 if (otherTech.leadsTo && otherTech.leadsTo.includes(techId)) {
                     if (player.researchedTechs.has(otherTechId)) return true;
                 }
             }
             
-            // Also allow techs with no prerequisites (like starting techs)
             const hasPrereq = Object.values(TECH_TREE).some(t => t.leadsTo && t.leadsTo.includes(techId));
             return !hasPrereq;
         }
 
-        // Select a tech to research
         function selectTech(techId) {
             const currentPlayer = gameState.players[gameState.currentPlayer];
             currentPlayer.currentResearch = techId;
@@ -2422,12 +2282,10 @@
             updateUI();
         }
 
-        // Hide technology tree
         function hideTechTree() {
             document.getElementById('tech-panel').style.display = 'none';
         }
 
-        // Show city management panel
         function showCityPanel(city) {
             const cityInfoElement = document.getElementById('city-info');
             const cityProductionElement = document.getElementById('city-production');
@@ -2440,11 +2298,9 @@
 
             cityProductionElement.innerHTML = '<h5>Production:</h5>';
 
-            // Show available units to produce
             for (const [unitType, unitDef] of Object.entries(UNIT_TYPES)) {
-                if (!unitDef.production.includes('CITY')) continue; // Only show units that cities can produce
+                if (!unitDef.production.includes('CITY')) continue;
 
-                // Check tech requirements
                 if (!unitDef.requires || player.researchedTechs.has(unitDef.requires)) {
                     const unitElement = document.createElement('div');
                     unitElement.className = 'tech-item';
@@ -2469,15 +2325,12 @@
                 player.gold -= unitDef.goldCost;
                 city.currentProduction = unitType;
                 city.production = 0;
-
-                //logMessage(`${player.name} started production of a ${unitDef.name} in ${city.name} for ${unitDef.goldCost} gold.`, player.id);
                 updateUI();
             } else {
                 alert("Not enough gold to start production!");
             }
         }
 
-        // Hide city panel
         function hideCityPanel() {
             document.getElementById('city-panel').style.display = 'none';
             gameState.selectedCity = null;
