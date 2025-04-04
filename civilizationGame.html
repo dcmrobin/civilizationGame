@@ -928,34 +928,42 @@
 
         // Check if a unit can move to a tile
         function canMoveTo(unit, x, y, ignoreUnits = false) {
+            // Check if the coordinates are out of bounds
             if (y < 0 || y >= gameState.map.length || x < 0 || x >= gameState.map[0].length) {
                 return false;
             }
-            
+
             const tile = gameState.map[y][x];
             const unitType = UNIT_TYPES[unit.type];
-            
+
+            // Check if the unit is naval
             if (unitType.naval) {
-                return (tile.name === 'Ocean' || tile.name === 'Coast');
+                // Naval units can only move to Ocean or Coast tiles
+                return tile.name === 'Ocean' || tile.name === 'Coast';
             } else {
-                if (tile.name === 'Ocean') return false;
-                if (tile.name === 'Coast') return (unit.type === 'SETTLER');
-            }
-            
-            if (ignoreUnits) {
-                return true;
-            }
-            
-            const otherUnit = findUnitAt(x, y);
-            if (otherUnit) {
-                if (otherUnit.player !== unit.player) {
-                    return canAttack(unit, otherUnit);
-                } else {
+                // Non-naval units cannot move to Ocean or Coast tiles
+                if (tile.name === 'Ocean' || tile.name === 'Coast') {
                     return false;
                 }
             }
-            
-            return true;
+
+            // If ignoring units, skip the unit check
+            if (ignoreUnits) {
+                return true;
+            }
+
+            // Check if another unit is already on the tile
+            const otherUnit = findUnitAt(x, y);
+            if (otherUnit) {
+                // Allow movement only if the other unit belongs to an enemy and the unit can attack
+                if (otherUnit.player !== unit.player) {
+                    return canAttack(unit, otherUnit);
+                } else {
+                    return false; // Cannot move onto a tile occupied by a friendly unit
+                }
+            }
+
+            return true; // Tile is valid for movement
         }
 
         // Check if a unit can attack another unit or a city
