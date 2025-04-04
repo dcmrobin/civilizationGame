@@ -247,6 +247,7 @@
 
         <div id="info-panel">
             <div>Turn: <span id="turn-counter">1</span></div>
+            <div>Food: <span id="food-counter">0</span></div>
             <div>Gold: <span id="gold-counter">50</span></div>
             <div>Research: <span id="research-counter">0</span>/<span id="research-needed">50</span> (<span id="current-tech">None</span>)</div>
         </div>
@@ -286,12 +287,12 @@
         const TILE_TYPES = {
             OCEAN: { name: 'Ocean', moveCost: 1, food: 1, production: 0, gold: 1, color: 'ocean' },
             COAST: { name: 'Coast', moveCost: 1, food: 2, production: 0, gold: 0, color: 'coast' },
-            GRASSLAND: { name: 'Grassland', moveCost: 1, food: 2, production: 1, gold: 0, color: 'grassland' },
+            GRASSLAND: { name: 'Grassland', moveCost: 1, food: 1, production: 1, gold: 0, color: 'grassland' },
             PLAINS: { name: 'Plains', moveCost: 1, food: 1, production: 1, gold: 0, color: 'plains' },
             DESERT: { name: 'Desert', moveCost: 2, food: 0, production: 0, gold: 0, color: 'desert' },
             MOUNTAINS: { name: 'Mountains', moveCost: 3, food: 0, production: 1, gold: 1, color: 'mountains' },
             SNOW: { name: 'Snow', moveCost: 4, food: 0, production: -1, gold: 0, color: 'snow' },
-            FOREST: { name: 'Forest', moveCost: 2, food: 1, production: 1, gold: 0, color: 'forest' }
+            FOREST: { name: 'Forest', moveCost: 2, food: 2, production: 1, gold: 0, color: 'forest' }
         };
 
         const UNIT_TYPES = {
@@ -299,7 +300,7 @@
             WARRIOR: { name: 'Warrior', cost: 10, goldCost: 30, strength: 20, move: 1, range: 1, production: ['CITY'], foodConsumption: 1 },
             ARCHER: { name: 'Archer', cost: 20, goldCost: 40, strength: 10, move: 1, range: 2, production: ['CITY'], requires: 'ARCHERY', foodConsumption: 1 },
             SPEARMAN: { name: 'Spearman', cost: 20, goldCost: 50, strength: 30, move: 1, range: 1, production: ['CITY'], requires: 'BRONZE_WORKING', foodConsumption: 1 },
-            GALLEY: { name: 'Galley', cost: 30, goldCost: 120, strength: 10, move: 3, production: ['PORT'], naval: true, foodConsumption: 2 }
+            GALLEY: { name: 'Galley', cost: 30, goldCost: 120, strength: 10, move: 3, production: ['PORT'], naval: true, foodConsumption: 3 }
         };
 
         const TECH_TREE = {
@@ -1566,9 +1567,22 @@
         }
 
         function processPlayerTurn(player) {
+            // Initialize as let instead of const since we'll modify them
             let totalFood = 0;
-            let totalFoodConsumption = 0;
+            let foodConsumption = 0;
 
+            // First calculate base food from cities
+            for (const city of player.cities) {
+                city.food = calculateCityFood(city.x, city.y);
+                totalFood += city.food;
+            }
+
+            // Then calculate consumption from units
+            for (const unit of player.units) {
+                foodConsumption += UNIT_TYPES[unit.type].foodConsumption;
+            }
+
+            // Process unit movement and reset
             for (const unit of player.units) {
                 if (unit.remainingMoves > 0) {
                     unit.remainingMoves--;
@@ -1582,27 +1596,19 @@
                 unit.hasAttacked = false;
             }
 
-            for (const city of player.cities) {
-                city.food = calculateCityFood(city.x, city.y);
-                totalFood += city.food;
-            }
-
-            for (const unit of player.units) {
-                totalFoodConsumption += UNIT_TYPES[unit.type].foodConsumption;
-            }
-
-            if (totalFood < totalFoodConsumption) {
-                logMessage(`${player.name} has a food shortage!`, player.id);
-                const foodDeficit = totalFoodConsumption - totalFood;
-
-                for (let i = 0; i < foodDeficit; i++) {
-                    if (player.units.length > 0) {
-                        const weakestUnit = player.units.reduce((weakest, unit) =>
-                            UNIT_TYPES[unit.type].strength < UNIT_TYPES[weakest.type].strength ? unit : weakest
-                        );
-                        logMessage(`${player.name} loses a ${weakestUnit.type} due to starvation!`, player.id);
-                        player.units = player.units.filter(u => u !== weakestUnit);
-                    }
+            // Handle food shortage
+            if (totalFood < foodConsumption) {
+                const deficit = foodConsumption - totalFood;
+                logMessage(`${player.name} has a food shortage! ${deficit} units will starve.`, player.id);
+                
+                const sortedUnits = [...player.units].sort((a, b) => 
+                    UNIT_TYPES[a.type].strength - UNIT_TYPES[b.type].strength
+                );
+                
+                for (let i = 0; i < deficit && sortedUnits.length > 0; i++) {
+                    const unitToRemove = sortedUnits.shift();
+                    player.units = player.units.filter(u => u !== unitToRemove);
+                    logMessage(`${player.name}'s ${unitToRemove.type} starved to death!`, player.id);
                 }
             }
 
@@ -1809,34 +1815,55 @@
         }
 
         function aiTurn(aiPlayer) {
+            // Calculate current food situation
+            const totalFood = aiPlayer.cities.reduce((sum, city) => sum + city.food, 0);
+            const foodConsumption = aiPlayer.units.reduce((sum, unit) => sum + UNIT_TYPES[unit.type].foodConsumption, 0);
+            const foodBalance = totalFood - foodConsumption;
+
             const threats = assessThreats(aiPlayer);
             const expansionOpportunities = findExpansionOpportunities(aiPlayer);
 
+            // Smarter city production logic
             for (const city of aiPlayer.cities) {
                 if (!city.currentProduction) {
                     const options = [];
-
-                    if (expansionOpportunities.length > 0 && Math.random() > 0.3) {
+                    
+                    // Only consider settlers if we have positive food balance
+                    if (expansionOpportunities.length > 0 && foodBalance > 2 && Math.random() > 0.5) {
                         options.push('SETTLER');
                     }
 
-                    if (threats.length > 0 || isHostile(aiPlayer)) {
-                        options.push('WARRIOR');
-                        if (aiPlayer.researchedTechs.has('ARCHERY')) options.push('ARCHER');
-                        if (aiPlayer.researchedTechs.has('BRONZE_WORKING')) options.push('SPEARMAN');
+                    // Military units based on threat level
+                    const militaryNeeded = threats.length > 0 || isHostile(aiPlayer);
+                    if (militaryNeeded) {
+                        // Don't overproduce if we're already at food limit
+                        if (foodBalance > 0 || aiPlayer.units.length < aiPlayer.cities.length * 3) {
+                            options.push('WARRIOR');
+                            if (aiPlayer.researchedTechs.has('ARCHERY')) options.push('ARCHER');
+                            if (aiPlayer.researchedTechs.has('BRONZE_WORKING')) options.push('SPEARMAN');
+                        }
                     }
 
-                    if (options.length === 0) {
+                    // Default to economic focus if no pressing needs
+                    if (options.length === 0 && foodBalance < 1) {
+                        // Maybe build something that generates food in future updates
+                        continue;
+                    }
+
+                    // Fallback to warriors if nothing else (but limited by food)
+                    if (options.length === 0 && aiPlayer.units.length < aiPlayer.cities.length * 4) {
                         options.push('WARRIOR');
                     }
 
-                    const selectedUnit = options[Math.floor(Math.random() * options.length)];
-                    const unitDef = UNIT_TYPES[selectedUnit];
-
-                    if (aiPlayer.gold >= unitDef.goldCost) {
-                        aiPlayer.gold -= unitDef.goldCost;
-                        city.currentProduction = selectedUnit;
-                        city.production = 0;
+                    if (options.length > 0) {
+                        const selectedUnit = options[Math.floor(Math.random() * options.length)];
+                        const unitDef = UNIT_TYPES[selectedUnit];
+                        
+                        if (aiPlayer.gold >= unitDef.goldCost) {
+                            aiPlayer.gold -= unitDef.goldCost;
+                            city.currentProduction = selectedUnit;
+                            city.production = 0;
+                        }
                     }
                 }
             }
@@ -2120,6 +2147,10 @@
         // Update the UI
         function updateUI() {
             const currentPlayer = gameState.players[gameState.currentPlayer];
+
+            const totalFood = currentPlayer.cities.reduce((sum, city) => sum + city.food, 0);
+            const foodConsumption = currentPlayer.units.reduce((sum, unit) => sum + UNIT_TYPES[unit.type].foodConsumption, 0);
+            document.getElementById('food-counter').textContent = `${totalFood} (${foodConsumption} consumed)`;
             
             document.getElementById('turn-counter').textContent = gameState.turn;
             document.getElementById('gold-counter').textContent = currentPlayer.gold;
