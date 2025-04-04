@@ -297,6 +297,7 @@
 
         const UNIT_TYPES = {
             SETTLER: { name: 'Settler', cost: 30, goldCost: 50, strength: 0, move: 1, production: ['CITY'], foodConsumption: 2 },
+            SCOUT: { name: 'Scout', cost: 5, goldCost: 10, strength: 5, move: 2, production: ['CITY'], foodConsumption: 1 },
             WARRIOR: { name: 'Warrior', cost: 10, goldCost: 30, strength: 20, move: 1, range: 1, production: ['CITY'], foodConsumption: 1 },
             ARCHER: { name: 'Archer', cost: 20, goldCost: 40, strength: 10, move: 1, range: 2, production: ['CITY'], requires: 'ARCHERY', foodConsumption: 1 },
             SPEARMAN: { name: 'Spearman', cost: 20, goldCost: 50, strength: 30, move: 1, range: 1, production: ['CITY'], requires: 'BRONZE_WORKING', foodConsumption: 1 },
@@ -997,7 +998,7 @@
             }
 
             if (unit.moves < tile.moveCost) {
-                unit.remainingMoves = tile.moveCost - unit.moves + 1;
+                unit.remainingMoves = tile.moveCost - unit.moves + 2;
                 unit.moves = 0;
                 unit.targetX = x;
                 unit.targetY = y;
@@ -1918,7 +1919,9 @@
                                 const path = findPath(unit.x, unit.y, nextOpportunity.x, nextOpportunity.y, unit);
                                 if (path.length > 0) {
                                     const nextStep = path[0];
-                                    moveUnit(unit, nextStep.x, nextStep.y);
+                                    if (canMoveTo(unit, nextStep.x, nextStep.y)) {
+                                        moveUnit(unit, nextStep.x, nextStep.y); // Use moveUnit to handle multi-turn movement
+                                    }
                                 }
                             } else {
                                 // No opportunities left, explore the map
