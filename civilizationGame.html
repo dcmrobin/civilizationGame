@@ -894,6 +894,8 @@
 
         // Check if a unit can attack another unit or a city
         function canAttack(attacker, target) {
+            if (attacker.type === 'SETTLER') return false;
+
             const attackerType = UNIT_TYPES[attacker.type];
 
             if (target.health !== undefined) {
@@ -1051,6 +1053,10 @@
 
         // Resolve combat between a unit and another unit or a city
         function resolveCombat(attacker, target) {
+            if (attacker.type === 'SETTLER') {
+                return;
+            }
+
             const attackerType = UNIT_TYPES[attacker.type];
             const attackerPlayer = gameState.players[attacker.player];
 
