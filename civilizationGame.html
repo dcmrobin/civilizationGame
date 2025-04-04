@@ -1085,12 +1085,17 @@
             const attackerType = UNIT_TYPES[attacker.type];
             const attackerPlayer = gameState.players[attacker.player];
 
+            if (attackerType === 'SETTLER') {
+                return;
+            }
+
             if (attacker.hasAttacked) {
                 logMessage(`${attacker.type} has already attacked this turn.`, attacker.player);
                 return;
             }
 
             if (target.health !== undefined) {
+                // Target is a city
                 const city = target;
                 const cityPlayer = gameState.players[city.player];
 
@@ -1105,66 +1110,7 @@
 
                 logMessage(`${attackerPlayer.name}'s ${attacker.type} dealt ${Math.round(damage)} damage to ${city.name}.`, attacker.player, city.player);
 
-                if (city.health <= 0) {
-                    logMessage(`${city.name} has been defeated!`, attacker.player, city.player);
-                    captureOrDestroyCity(attackerPlayer, cityPlayer, city);
-                }
-            } else {
-                const defender = target;
-                const defenderPlayer = gameState.players[defender.player];
-
-                const damage = attackerType.strength * (1 + Math.random() * 0.2);
-                defenderPlayer.units = defenderPlayer.units.filter(u => u !== defender);
-
-                attackerPlayer.relations[defender.player].hasMet = true;
-                defenderPlayer.relations[attacker.player].hasMet = true;
-
-                defenderPlayer.relations[attacker.player].attitude = Math.max(0, defenderPlayer.relations[attacker.player].attitude - 10);
-                attackerPlayer.relations[defender.player].attitude = Math.max(0, attackerPlayer.relations[defender.player].attitude - 10);
-
-                logMessage(`${attackerPlayer.name}'s ${attacker.type} defeated ${defenderPlayer.name}'s ${defender.type}.`, attacker.player, defender.player);
-            }
-
-            attacker.hasAttacked = true;
-        }
-
-        // Resolve combat between a unit and another unit or a city
-        function resolveCombat(attacker, target) {
-            if (attacker.type === 'SETTLER') {
-                return;
-            }
-
-            const attackerType = UNIT_TYPES[attacker.type];
-            const attackerPlayer = gameState.players[attacker.player];
-
-            if (attacker.hasAttacked) {
-                return;
-            }
-
-            if (target.health !== undefined) {
-                const city = target;
-                const cityPlayer = gameState.players[city.player];
-
-                const attackerStrength = attackerType.strength * (1 + Math.random() * 0.2);
-                city.health -= attackerStrength;
-
-                logMessage(`${attackerPlayer.name} is attacking ${city.name}!`, attacker.player, city.player);
-
-                if (attackerPlayer.id !== cityPlayer.id) {
-                    if (!attackerPlayer.relations[cityPlayer.id]) {
-                        attackerPlayer.relations[cityPlayer.id] = { attitude: 50, hasMet: true };
-                    }
-                    if (!cityPlayer.relations[attackerPlayer.id]) {
-                        cityPlayer.relations[attackerPlayer.id] = { attitude: 50, hasMet: true };
-                    }
-
-                    attackerPlayer.relations[cityPlayer.id].hasMet = true;
-                    cityPlayer.relations[attackerPlayer.id].hasMet = true;
-
-                    attackerPlayer.relations[cityPlayer.id].attitude = Math.max(0, attackerPlayer.relations[cityPlayer.id].attitude - 10);
-                    cityPlayer.relations[attackerPlayer.id].attitude = Math.max(0, cityPlayer.relations[attackerPlayer.id].attitude - 10);
-                }
-
+                // Check if allies come to help
                 for (const ally of gameState.players) {
                     if (ally.id !== cityPlayer.id && ally.relations[cityPlayer.id]?.attitude >= 80) {
                         if (ally.id !== attackerPlayer.id) {
@@ -1179,75 +1125,24 @@
                 if (city.health <= 0) {
                     logMessage(`${city.name} has been defeated!`, attacker.player, city.player);
                     captureOrDestroyCity(attackerPlayer, cityPlayer, city);
-
-                    gameState.unitDestinations[attacker.id] = {
-                        targetX: attacker.x,
-                        targetY: attacker.y,
-                        path: []
-                    };
-                }
-
-                attacker.hasAttacked = true;
-                return;
-            }
-
-            const defender = target;
-            const defenderType = UNIT_TYPES[defender.type];
-            const defenderPlayer = gameState.players[defender.player];
-
-            const attackerStrength = attackerType.strength * (1 + Math.random() * 0.2);
-            const defenderStrength = defenderType.strength * (1 + Math.random() * 0.2);
-
-            if (attackerStrength > defenderStrength) {
-                defenderPlayer.units = defenderPlayer.units.filter(u => u !== defender);
-
-                attacker.x = defender.x;
-                attacker.y = defender.y;
-                attacker.moves = 0;
-
-                if (attackerPlayer.id !== defenderPlayer.id) {
-                    if (!defenderPlayer.relations[attacker.player]) {
-                        defenderPlayer.relations[attacker.player] = { attitude: 50, hasMet: true };
-                    }
-                    if (!attackerPlayer.relations[defender.player]) {
-                        attackerPlayer.relations[defender.player] = { attitude: 50, hasMet: true };
-                    }
-
-                    attackerPlayer.relations[defender.player].hasMet = true;
-                    defenderPlayer.relations[attacker.player].hasMet = true;
-
-                    defenderPlayer.relations[attacker.player].attitude = Math.max(0, defenderPlayer.relations[attacker.player].attitude - 10);
-                    attackerPlayer.relations[defender.player].attitude = Math.max(0, attackerPlayer.relations[defender.player].attitude - 10);
-                }
-
-                for (const ally of gameState.players) {
-                    if (ally.id !== defenderPlayer.id && ally.relations[defenderPlayer.id]?.attitude >= 80) {
-                        if (ally.id !== attackerPlayer.id) {
-                            ally.relations[attacker.player] = ally.relations[attacker.player] || { attitude: 50, hasMet: true };
-                            ally.relations[attacker.player].attitude = Math.max(0, ally.relations[attacker.player].attitude - 40);
-
-                            logMessage(`${ally.name} has come to the aid of ${defenderPlayer.name} and is now hostile toward ${attackerPlayer.name}!`, ally.id, attacker.player);
-                        }
-                    }
                 }
             } else {
-                attackerPlayer.units = attackerPlayer.units.filter(u => u !== attacker);
+                // Target is a unit
+                const defender = target;
+                const defenderPlayer = gameState.players[defender.player];
 
-                if (attackerPlayer.id !== defenderPlayer.id) {
-                    if (!attackerPlayer.relations[defender.player]) {
-                        attackerPlayer.relations[defender.player] = { attitude: 50, hasMet: true };
-                    }
-                    if (!defenderPlayer.relations[attacker.player]) {
-                        defenderPlayer.relations[attacker.player] = { attitude: 50, hasMet: true };
-                    }
+                const damage = attackerType.strength * (1 + Math.random() * 0.2);
+                defenderPlayer.units = defenderPlayer.units.filter(u => u !== defender);
 
-                    attackerPlayer.relations[defender.player].hasMet = true;
-                    defenderPlayer.relations[attacker.player].hasMet = true;
+                attackerPlayer.relations[defender.player].hasMet = true;
+                defenderPlayer.relations[attacker.player].hasMet = true;
 
-                    attackerPlayer.relations[defender.player].attitude = Math.max(0, attackerPlayer.relations[defender.player].attitude - 10);
-                    defenderPlayer.relations[attacker.player].attitude = Math.max(0, defenderPlayer.relations[attacker.player].attitude - 10);
-                }
+                defenderPlayer.relations[attacker.player].attitude = Math.max(0, defenderPlayer.relations[attacker.player].attitude - 10);
+                attackerPlayer.relations[defender.player].attitude = Math.max(0, attackerPlayer.relations[defender.player].attitude - 10);
 
+                logMessage(`${attackerPlayer.name}'s ${attacker.type} defeated ${defenderPlayer.name}'s ${defender.type}.`, attacker.player, defender.player);
+
+                // Check if allies come to help
                 for (const ally of gameState.players) {
                     if (ally.id !== defenderPlayer.id && ally.relations[defenderPlayer.id]?.attitude >= 80) {
                         if (ally.id !== attackerPlayer.id) {
@@ -1341,7 +1236,9 @@
                 } else {
                     // Destroy the city
                     cityPlayer.cities = cityPlayer.cities.filter(c => c !== city);
-                    logMessage(`${attackerPlayer.name} has destroyed ${city.name}!`, attackerPlayer.id, cityPlayer.id);
+                    const goldReward = Math.floor(Math.random() * 20) + 10; // Random gold reward between 10 and 30
+                    attackerPlayer.gold += goldReward;
+                    logMessage(`${attackerPlayer.name} has destroyed ${city.name} and gained ${goldReward} gold!`, attackerPlayer.id, cityPlayer.id);
                 }
             } else {
                 // AI logic
@@ -1355,7 +1252,9 @@
                     logMessage(`${attackerPlayer.name} has captured ${city.name}!`, attackerPlayer.id, cityPlayer.id);
                 } else {
                     cityPlayer.cities = cityPlayer.cities.filter(c => c !== city);
-                    logMessage(`${attackerPlayer.name} has destroyed ${city.name}!`, attackerPlayer.id, cityPlayer.id);
+                    const goldReward = Math.floor(Math.random() * 20) + 10; // Random gold reward between 10 and 30
+                    attackerPlayer.gold += goldReward;
+                    logMessage(`${attackerPlayer.name} has destroyed ${city.name} and gained ${goldReward} gold!`, attackerPlayer.id, cityPlayer.id);
                 }
             }
 
@@ -1405,7 +1304,7 @@
         }
 
         function calculateCityFood(x, y) {
-            let food = 0;
+            let food = 2; // Base food value for the city itself
             const directions = [
                 { dx: 0, dy: -1 }, { dx: 1, dy: 0 },
                 { dx: 0, dy: 1 }, { dx: -1, dy: 0 },
@@ -1783,10 +1682,10 @@
                 }
 
                 const directions = [
-                    { dx: 0, dy: -1 },
-                    { dx: 1, dy: 0 },
-                    { dx: 0, dy: 1 },
-                    { dx: -1, dy: 0 }
+                    { dx: 0, dy: -1 }, // Up
+                    { dx: 1, dy: 0 },  // Right
+                    { dx: 0, dy: 1 },  // Down
+                    { dx: -1, dy: 0 }  // Left
                 ];
 
                 for (const dir of directions) {
@@ -1795,8 +1694,10 @@
 
                     if (visited.has(`${nx},${ny}`)) continue;
                     if (!canMoveTo(unit, nx, ny, true)) continue;
-                    if (findCityAt(nx, ny) && (nx !== targetX || ny !== targetY)) continue;
-                    if (findUnitAt(nx, ny) && (nx !== targetX || ny !== targetY)) continue;
+
+                    // Avoid tiles occupied by other units or cities unless it's the target
+                    const isTargetTile = nx === targetX && ny === targetY;
+                    if (!isTargetTile && (findCityAt(nx, ny) || findUnitAt(nx, ny))) continue;
 
                     const tile = gameState.map[ny][nx];
                     const moveCost = tile.moveCost || 1;
@@ -2031,14 +1932,22 @@
 
                     if (unitType.range) {
                         const target = findRangedTarget(unit, aiPlayer);
-                        if (target) {
+                        if (target && target.player !== undefined) {
+                            const targetPlayer = gameState.players[target.player];
+                            if (aiPlayer.relations[targetPlayer.id]?.attitude >= 60) {
+                                continue; // Skip attacking if relations are "Friendly" or better
+                            }
                             performRangedAttack(unit, target.x, target.y);
                             continue;
                         }
                     }
 
                     const target = findBestTarget(unit, aiPlayer, threats, expansionOpportunities);
-                    if (target) {
+                    if (target && target.player !== undefined) {
+                        const targetPlayer = gameState.players[target.player];
+                        if (aiPlayer.relations[targetPlayer.id]?.attitude >= 60) {
+                            continue; // Skip attacking if relations are "Friendly" or better
+                        }
                         const path = findPath(unit.x, unit.y, target.x, target.y, unit);
                         if (path.length > 0) {
                             const nextStep = path[0];
@@ -2097,9 +2006,9 @@
                 if (
                     randomY >= 0 && randomY < gameState.map.length &&
                     randomX >= 0 && randomX < gameState.map[0].length &&
-                    canMoveTo(unit, randomX, randomY, true) &&
-                    !findCityAt(randomX, randomY) &&
-                    !findUnitAt(randomX, randomY)
+                    canMoveTo(unit, randomX, randomY) && // Ensure the tile is valid for movement
+                    !findCityAt(randomX, randomY) && // Exclude tiles with cities
+                    !findUnitAt(randomX, randomY) // Avoid tiles with other units
                 ) {
                     targetTile = { x: randomX, y: randomY };
                     break;
@@ -2127,7 +2036,11 @@
             for (const dir of directions) {
                 const nx = unit.x + dir.dx;
                 const ny = unit.y + dir.dy;
-                if (canMoveTo(unit, nx, ny)) {
+                if (
+                    canMoveTo(unit, nx, ny) && // Ensure the tile is valid for movement
+                    !findCityAt(nx, ny) && // Exclude tiles with cities
+                    !findUnitAt(nx, ny) // Avoid tiles with other units
+                ) {
                     moveUnit(unit, nx, ny);
                     break;
                 }
