@@ -247,7 +247,7 @@
 
         <div id="info-panel">
             <div>Turn: <span id="turn-counter">1</span></div>
-            <div>Food: <span id="food-counter">0</span></div>
+            <div>Food capacity: <span id="food-counter">0</span></div>
             <div>Gold: <span id="gold-counter">50</span></div>
             <div>Research: <span id="research-counter">0</span>/<span id="research-needed">50</span> (<span id="current-tech">None</span>)</div>
         </div>
@@ -2150,7 +2150,7 @@
 
             const totalFood = currentPlayer.cities.reduce((sum, city) => sum + city.food, 0);
             const foodConsumption = currentPlayer.units.reduce((sum, unit) => sum + UNIT_TYPES[unit.type].foodConsumption, 0);
-            document.getElementById('food-counter').textContent = `${totalFood} (${foodConsumption} consumed)`;
+            document.getElementById('food-counter').textContent = `${totalFood} (${foodConsumption} used)`;
             
             document.getElementById('turn-counter').textContent = gameState.turn;
             document.getElementById('gold-counter').textContent = currentPlayer.gold;
