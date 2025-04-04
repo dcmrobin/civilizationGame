@@ -2000,11 +2000,11 @@
                         // Check the current tile's score
                         const currentTileScore = evaluateTileScore(unit.x, unit.y, aiPlayer);
 
-                        if (currentTileScore >= 18) {
+                        /*if (currentTileScore >= 18) {
                             // If the current tile is good enough, found a city
                             foundCity(unit, unit.x, unit.y);
                             continue;
-                        }
+                        }*/
 
                         // Find the best nearby opportunity
                         const validTile = expansionOpportunities.find(opportunity =>
