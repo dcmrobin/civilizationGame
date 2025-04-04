@@ -70,7 +70,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 10px;
+            font-size: 9px;
             font-weight: bold;
             color: white;
             text-shadow: 1px 1px 1px black;
@@ -80,15 +80,15 @@
             position: absolute;
             width: 16px;
             height: 16px;
-            top: 2px;
-            left: 2px;
+            top: 1px;
+            left: 1px;
             background-color: rgba(0,0,0,0.5);
             border: 1px solid white;
             z-index: 2;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 10px;
+            font-size: 9px;
             font-weight: bold;
             color: white;
         }
@@ -775,13 +775,13 @@
         // Optimized renderMap function
         function renderMap() {
             if (!gameState.mapDirty) return;
-            
+
             const mapElement = document.getElementById('map');
-            
+
             // Clear only dynamic elements (units and city markers)
             const dynamicElements = mapElement.querySelectorAll('.unit, .city');
             dynamicElements.forEach(el => el.remove());
-            
+
             // Redraw all cities first
             for (const player of gameState.players) {
                 for (const city of player.cities) {
@@ -789,12 +789,13 @@
                     if (tileElement) {
                         const cityElement = document.createElement('div');
                         cityElement.className = `city ${player.color}`;
-                        cityElement.textContent = city.name[0];
+                        cityElement.textContent = city.name.slice(0, 2); // Display the first two letters
+                        cityElement.style.textShadow = '1px 1px 2px black'; // Add text shadow
                         tileElement.appendChild(cityElement);
                     }
                 }
             }
-            
+
             // Then redraw all units (so they appear above cities)
             for (const player of gameState.players) {
                 for (const unit of player.units) {
@@ -802,7 +803,7 @@
                     if (tileElement) {
                         const unitElement = document.createElement('div');
                         unitElement.className = `unit ${player.color}`;
-                        unitElement.textContent = unit.type[0];
+                        unitElement.textContent = unit.type.slice(0, 2); // Display the first two letters
                         if (unit.player === gameState.currentPlayer && unit.moves > 0) {
                             unitElement.style.boxShadow = '0 0 0 2px white';
                         }
@@ -810,7 +811,7 @@
                     }
                 }
             }
-            
+
             // Highlight attack ranges
             gameState.highlightedTiles.forEach(({ x, y }) => {
                 const tileElement = document.querySelector(`.tile[data-x="${x}"][data-y="${y}"]`);
@@ -818,7 +819,7 @@
                     tileElement.classList.add('attack-range');
                 }
             });
-            
+
             gameState.mapDirty = false;
         }
 
