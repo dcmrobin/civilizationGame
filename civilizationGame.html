@@ -1060,9 +1060,12 @@
             const attackerType = UNIT_TYPES[attacker.type];
             if (!attackerType.range) return;
 
-            const distance = Math.abs(attacker.x - targetX) + Math.abs(attacker.y - targetY);
-            if (distance > attackerType.range) {
-                logMessage(`${attacker.type} cannot attack target at (${targetX}, ${targetY}) because it is out of range.`, attacker.player);
+            const dx = Math.abs(attacker.x - targetX);
+            const dy = Math.abs(attacker.y - targetY);
+
+            // Ensure the target is within range and only orthogonal
+            if ((dx !== 0 && dy !== 0) || dx + dy > attackerType.range) {
+                logMessage(`${attacker.type} cannot attack target at (${targetX}, ${targetY}) because it is out of range or not orthogonal.`, attacker.player);
                 return;
             }
 
@@ -1874,18 +1877,30 @@
             for (const player of gameState.players) {
                 if (player.id !== aiPlayer.id) {
                     for (const enemyUnit of player.units) {
-                        const distance = Math.abs(unit.x - enemyUnit.x) + Math.abs(unit.y - enemyUnit.y);
-                        if (distance <= unitType.range && distance < closestDistance) {
-                            closestTarget = enemyUnit;
-                            closestDistance = distance;
+                        const dx = Math.abs(unit.x - enemyUnit.x);
+                        const dy = Math.abs(unit.y - enemyUnit.y);
+
+                        // Ensure the target is within range and only orthogonal
+                        if ((dx === 0 || dy === 0) && dx + dy <= unitType.range) {
+                            const distance = dx + dy;
+                            if (distance < closestDistance) {
+                                closestTarget = enemyUnit;
+                                closestDistance = distance;
+                            }
                         }
                     }
 
                     for (const enemyCity of player.cities) {
-                        const distance = Math.abs(unit.x - enemyCity.x) + Math.abs(unit.y - enemyCity.y);
-                        if (distance <= unitType.range && distance < closestDistance) {
-                            closestTarget = enemyCity;
-                            closestDistance = distance;
+                        const dx = Math.abs(unit.x - enemyCity.x);
+                        const dy = Math.abs(unit.y - enemyCity.y);
+
+                        // Ensure the target is within range and only orthogonal
+                        if ((dx === 0 || dy === 0) && dx + dy <= unitType.range) {
+                            const distance = dx + dy;
+                            if (distance < closestDistance) {
+                                closestTarget = enemyCity;
+                                closestDistance = distance;
+                            }
                         }
                     }
                 }
