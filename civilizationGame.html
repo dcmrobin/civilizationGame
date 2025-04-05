@@ -137,6 +137,24 @@
             background-color: rgba(255, 0, 0, 0.5);
             z-index: 1;
         }
+        .tile.buildable {
+            outline: 2px dashed yellow;
+            outline-offset: -2px;
+        }
+        .construction {
+            position: absolute;
+            width: 16px;
+            height: 16px;
+            top: 1px;
+            left: 1px;
+            background-color: #555;
+            border: 1px dashed white;
+            z-index: 2;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+        }
         #diplomacy-panel, #city-panel {
             width: 800px;
             padding: 10px;
@@ -862,6 +880,26 @@
                 }
             }
 
+            // Render buildings and construction sites
+            for (const building of gameState.buildings) {
+                const tileElement = document.querySelector(`.tile[data-x="${building.x}"][data-y="${building.y}"]`);
+                if (tileElement) {
+                    const buildingElement = document.createElement('div');
+                    
+                    if (building.type === 'GRANARY') {
+                        buildingElement.className = `granary ${gameState.players[building.player].color}`;
+                        buildingElement.textContent = 'GR';
+                    } 
+                    else if (building.type === 'GRANARY_CONSTRUCTION') {
+                        buildingElement.className = `construction ${gameState.players[building.player].color}`;
+                        buildingElement.textContent = '🚧';
+                        buildingElement.title = `Granary under construction (${building.turnsRemaining} turns left)`;
+                    }
+                    
+                    tileElement.appendChild(buildingElement);
+                }
+            }
+
             // Highlight attack ranges
             gameState.highlightedTiles.forEach(({ x, y }) => {
                 const tileElement = document.querySelector(`.tile[data-x="${x}"][data-y="${y}"]`);
@@ -955,6 +993,31 @@
         function handleTileClick(x, y) {
             const currentPlayer = gameState.players[gameState.currentPlayer];
             const city = findCityAt(x, y);
+
+            // Check if we're placing a granary
+            if (gameState.granaryConstruction) {
+                const { cityX, cityY, playerId } = gameState.granaryConstruction;
+                const player = gameState.players[playerId];
+                
+                // Check if clicked tile is adjacent and highlighted
+                const isAdjacent = (Math.abs(x - cityX) + Math.abs(y - cityY)) === 1;
+                const isHighlighted = gameState.highlightedTiles.some(t => t.x === x && t.y === y);
+                
+                if (isAdjacent && isHighlighted) {
+                    if (buildGranary(player, x, y)) {
+                        // Clear highlights
+                        gameState.highlightedTiles.forEach(t => {
+                            const tileElement = document.querySelector(`.tile[data-x="${t.x}"][data-y="${t.y}"]`);
+                            if (tileElement) tileElement.classList.remove('buildable');
+                        });
+                        gameState.highlightedTiles = [];
+                        delete gameState.granaryConstruction;
+                    }
+                } else {
+                    alert("Please select one of the highlighted adjacent tiles");
+                }
+                return;
+            }
             
             if (city && city.player === currentPlayer.id) {
                 gameState.selectedCity = city;
@@ -1601,43 +1664,30 @@
 
         function buildGranary(player, x, y) {
             if (!canBuildGranary(player, x, y)) {
+                alert("Cannot build a granary here!");
                 return false;
             }
 
-            // Check if there's already a building on this tile
-            if (findBuildingAt(x, y)) {
-                return false;
-            }
-
-            // Check if the tile is valid (not water)
-            const tile = gameState.map[y][x];
-            if (tile.name === 'Ocean' || tile.name === 'Coast') {
-                return false;
-            }
-
-            // Deduct gold cost
+            // Deduct gold immediately
             player.gold -= BUILDING_TYPES.GRANARY.goldCost;
-
-            // Create the granary
-            const granary = {
-                type: 'GRANARY',
+            
+            // Create construction site (not complete granary yet)
+            const construction = {
+                type: 'GRANARY_CONSTRUCTION',
                 x: x,
                 y: y,
                 player: player.id,
-                health: 50, // Buildings have health and can be attacked
-                productionProgress: 0,
-                productionCost: BUILDING_TYPES.GRANARY.productionCost
+                progress: 0,
+                totalProgress: BUILDING_TYPES.GRANARY.productionCost,
+                turnsRemaining: 4 // Takes 4 turns to complete
             };
 
-            gameState.buildings.push(granary);
-            player.buildings.push(granary);
-
-            logMessage(`${player.name} started building a Granary at (${x}, ${y}).`, player.id);
-
+            gameState.buildings.push(construction);
+            logMessage(`${player.name} started building a Granary at (${x}, ${y}). Will complete in ${construction.turnsRemaining} turns.`, player.id);
+            
             gameState.mapDirty = true;
             renderMap();
             updateUI();
-
             return true;
         }
 
@@ -1812,9 +1862,8 @@
 
             // Process building construction
             for (const building of gameState.buildings) {
-                if (building.player === player.id && building.productionProgress < building.productionCost) {
-                    // Get adjacent city's production
-                    let production = 0;
+                if (building.isUnderConstruction && building.productionProgress < building.productionCost) {
+                    // Find adjacent city contributing production
                     const directions = [
                         { dx: 0, dy: -1 }, { dx: 1, dy: 0 },
                         { dx: 0, dy: 1 }, { dx: -1, dy: 0 }
@@ -1823,19 +1872,49 @@
                     for (const dir of directions) {
                         const nx = building.x + dir.dx;
                         const ny = building.y + dir.dy;
+                        const city = findCityAt(nx, ny);
                         
-                        if (ny >= 0 && ny < gameState.map.length && nx >= 0 && nx < gameState.map[0].length) {
-                            const city = findCityAt(nx, ny);
-                            if (city && city.player === player.id) {
-                                production += calculateCityProduction(nx, ny);
+                        if (city && city.player === player.id && city.currentProduction === 'GRANARY') {
+                            const production = calculateCityProduction(nx, ny);
+                            building.productionProgress += production;
+                            
+                            if (building.productionProgress >= building.productionCost) {
+                                building.isUnderConstruction = false;
+                                city.currentProduction = null; // Free up the city
+                                city.productionTarget = null;
+                                logMessage(`${player.name} has completed a Granary at (${building.x}, ${building.y})!`, player.id);
                             }
+                            break;
                         }
                     }
-                    
-                    building.productionProgress += production;
-                    
-                    if (building.productionProgress >= building.productionCost) {
-                        logMessage(`${player.name} has completed construction of a ${building.type}!`, player.id);
+                }
+            }
+
+            // Process construction progress
+            for (let i = gameState.buildings.length - 1; i >= 0; i--) {
+                const building = gameState.buildings[i];
+                if (building.type === 'GRANARY_CONSTRUCTION' && building.player === player.id) {
+                    // Get adjacent city production
+                    const production = getAdjacentCityProduction(building.x, building.y, player.id);
+                    building.progress += production;
+                    building.turnsRemaining--;
+
+                    if (building.progress >= building.totalProgress || building.turnsRemaining <= 0) {
+                        // Construction complete - replace with actual granary
+                        gameState.buildings.splice(i, 1); // Remove the construction site
+
+                        const granary = {
+                            type: 'GRANARY',
+                            x: building.x,
+                            y: building.y,
+                            player: player.id,
+                            health: 50 // Optional: Add health or other properties if needed
+                        };
+
+                        gameState.buildings.push(granary); // Add the completed granary
+                        logMessage(`${player.name} has completed a Granary at (${building.x}, ${building.y})!`, player.id);
+
+                        gameState.mapDirty = true; // Mark the map as dirty for re-rendering
                     }
                 }
             }
@@ -1920,6 +1999,23 @@
                     unit.moves = UNIT_TYPES[unit.type].move;
                 }
             }
+        }
+
+        function getAdjacentCityProduction(x, y, playerId) {
+            const directions = [
+                { dx: 0, dy: -1 }, { dx: 1, dy: 0 },
+                { dx: 0, dy: 1 }, { dx: -1, dy: 0 }
+            ];
+            
+            for (const dir of directions) {
+                const nx = x + dir.dx;
+                const ny = y + dir.dy;
+                const city = findCityAt(nx, ny);
+                if (city && city.player === playerId) {
+                    return calculateCityProduction(nx, ny);
+                }
+            }
+            return 0;
         }
 
         function findPath(startX, startY, targetX, targetY, unit) {
@@ -2119,32 +2215,38 @@
             const threats = assessThreats(aiPlayer);
             const expansionOpportunities = findExpansionOpportunities(aiPlayer);
 
-            // AI decision to build granaries
-            if (aiPlayer.researchedTechs.has('POTTERY') && aiPlayer.gold >= BUILDING_TYPES.GRANARY.goldCost) {
-                // Check if we have cities without adjacent granaries
+            // AI granary construction logic
+            if (aiPlayer.researchedTechs.has('POTTERY') && 
+                aiPlayer.gold >= BUILDING_TYPES.GRANARY.goldCost) {
+                
+                // Check each city for granary opportunities
                 for (const city of aiPlayer.cities) {
-                    const hasAdjacentGranary = gameState.buildings.some(b => 
-                        b.player === aiPlayer.id && 
-                        b.type === 'GRANARY' &&
-                        (Math.abs(b.x - city.x) + Math.abs(b.y - city.y)) === 1
-                    );
-                    
-                    if (!hasAdjacentGranary && foodBalance < 5) {
-                        // Try to find an adjacent tile to build a granary
-                        const directions = [
-                            { dx: 0, dy: -1 }, { dx: 1, dy: 0 },
-                            { dx: 0, dy: 1 }, { dx: -1, dy: 0 }
-                        ];
+                    // Only build if we have few granaries relative to cities
+                    const granaryCount = aiPlayer.buildings.filter(b => b.type === 'GRANARY').length;
+                    if (granaryCount < aiPlayer.cities.length * 0.75) { // Build granaries for 75% of cities
+                        const hasAdjacentGranary = gameState.buildings.some(b => 
+                            b.player === aiPlayer.id && 
+                            b.type === 'GRANARY' &&
+                            Math.abs(b.x - city.x) + Math.abs(b.y - city.y) === 1
+                        );
                         
-                        for (const dir of directions) {
-                            const nx = city.x + dir.dx;
-                            const ny = city.y + dir.dy;
+                        if (!hasAdjacentGranary) {
+                            // Find valid adjacent tile
+                            const directions = [
+                                { dx: 0, dy: -1 }, { dx: 1, dy: 0 },
+                                { dx: 0, dy: 1 }, { dx: -1, dy: 0 }
+                            ].sort(() => Math.random() - 0.5); // Randomize direction order
                             
-                            if (ny >= 0 && ny < gameState.map.length && nx >= 0 && nx < gameState.map[0].length) {
-                                const tile = gameState.map[ny][nx];
-                                if (tile.name !== 'Ocean' && tile.name !== 'Coast' && !findBuildingAt(nx, ny)) {
+                            for (const dir of directions) {
+                                const nx = city.x + dir.dx;
+                                const ny = city.y + dir.dy;
+                                
+                                if (ny >= 0 && ny < gameState.map.length &&
+                                    nx >= 0 && nx < gameState.map[0].length &&
+                                    canBuildGranary(aiPlayer, nx, ny)) {
+                                    
                                     if (buildGranary(aiPlayer, nx, ny)) {
-                                        break;
+                                        break; // Only build one granary per city per turn
                                     }
                                 }
                             }
@@ -2752,10 +2854,18 @@
             cityInfoElement.innerHTML = `
                 <h4>${city.name}</h4>
                 <p>Production: ${city.production}/${city.currentProduction ? UNIT_TYPES[city.currentProduction].cost : '0'}</p>
+                <p>Gold: ${player.gold}</p>
             `;
 
-            cityProductionElement.innerHTML = '<h5>Production:</h5>';
+            cityProductionElement.innerHTML = `
+                <h5>Units:</h5>
+                <div id="unit-production"></div>
+                <h5>Buildings:</h5>
+                <div id="building-production"></div>
+            `;
 
+            // Unit production
+            const unitProductionElement = document.getElementById('unit-production');
             for (const [unitType, unitDef] of Object.entries(UNIT_TYPES)) {
                 if (!unitDef.production.includes('CITY')) continue;
 
@@ -2763,26 +2873,114 @@
                     const unitElement = document.createElement('div');
                     unitElement.className = 'tech-item';
                     if (city.currentProduction === unitType) unitElement.classList.add('researched');
+                    
+                    const button = document.createElement('button');
+                    button.textContent = 'Build';
+                    button.onclick = () => startUnitProduction(unitType, city.x, city.y);
+                    
+                    // Disable button if already producing something
+                    button.disabled = !!city.currentProduction;
+                    
                     unitElement.innerHTML = `
                         ${unitDef.name} (${unitDef.cost} production, ${unitDef.goldCost} gold)
-                        <button onclick="startUnitProduction('${unitType}', ${city.x}, ${city.y})">Start Production</button>
                     `;
-                    cityProductionElement.appendChild(unitElement);
+                    unitElement.appendChild(button);
+                    unitProductionElement.appendChild(unitElement);
                 }
+            }
+
+            // Building production
+            const buildingProductionElement = document.getElementById('building-production');
+            if (player.researchedTechs.has('POTTERY')) {
+                const granaryElement = document.createElement('div');
+                granaryElement.className = 'tech-item';
+                
+                const button = document.createElement('button');
+                button.textContent = 'Build';
+                button.onclick = () => startGranaryConstruction(city.x, city.y);
+                
+                // Disable button if already producing something
+                button.disabled = !!city.currentProduction;
+                
+                granaryElement.innerHTML = `
+                    Granary (${BUILDING_TYPES.GRANARY.goldCost} gold)
+                `;
+                granaryElement.appendChild(button);
+                buildingProductionElement.appendChild(granaryElement);
             }
 
             document.getElementById('city-panel').style.display = 'block';
         }
 
+        function startGranaryConstruction(cityX, cityY) {
+            clearAttackRangeHighlights();
+            const city = findCityAt(cityX, cityY);
+            const player = gameState.players[city.player];
+            
+            if (player.gold < BUILDING_TYPES.GRANARY.goldCost) {
+                alert(`Not enough gold! Need ${BUILDING_TYPES.GRANARY.goldCost} gold.`);
+                return;
+            }
+
+            // Highlight adjacent tiles
+            const directions = [
+                { dx: 0, dy: -1 }, // Up
+                { dx: 1, dy: 0 },  // Right
+                { dx: 0, dy: 1 },  // Down
+                { dx: -1, dy: 0 }  // Left
+            ];
+
+            // Store the city location for building placement
+            gameState.granaryConstruction = {
+                cityX: cityX,
+                cityY: cityY,
+                playerId: player.id
+            };
+
+            // Highlight valid tiles
+            gameState.highlightedTiles = [];
+            for (const dir of directions) {
+                const nx = cityX + dir.dx;
+                const ny = cityY + dir.dy;
+
+                if (ny >= 0 && ny < gameState.map.length && nx >= 0 && nx < gameState.map[0].length) {
+                    const tile = gameState.map[ny][nx];
+                    if (tile.name !== 'Ocean' && tile.name !== 'Coast' && !findBuildingAt(nx, ny)) {
+                        gameState.highlightedTiles.push({ x: nx, y: ny });
+                        const tileElement = document.querySelector(`.tile[data-x="${nx}"][data-y="${ny}"]`);
+                        if (tileElement) {
+                            tileElement.classList.add('buildable');
+                        }
+                    }
+                }
+            }
+
+            if (gameState.highlightedTiles.length === 0) {
+                alert("No valid adjacent tiles to build a granary!");
+                delete gameState.granaryConstruction;
+                return;
+            }
+
+            alert("Click on an adjacent highlighted tile to build the granary");
+            gameState.mapDirty = true;
+            renderMap();
+        }
+
         function startUnitProduction(unitType, x, y) {
             const player = gameState.players[gameState.currentPlayer];
             const city = findCityAt(x, y);
-            const unitDef = UNIT_TYPES[unitType];
+            
+            if (city.currentProduction) {
+                alert("This city is already producing something!");
+                return;
+            }
 
+            const unitDef = UNIT_TYPES[unitType];
+            
             if (player.gold >= unitDef.goldCost) {
                 player.gold -= unitDef.goldCost;
                 city.currentProduction = unitType;
-                city.production = 0;
+                city.production = 0; // Reset production counter
                 updateUI();
             } else {
                 alert("Not enough gold to start production!");
