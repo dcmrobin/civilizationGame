@@ -834,8 +834,8 @@
 
             const mapElement = document.getElementById('map');
 
-            // Clear only dynamic elements (units, cities, and buildings)
-            const dynamicElements = mapElement.querySelectorAll('.unit, .city, .granary');
+            // Clear ALL dynamic elements (units, cities, buildings, highlights)
+            const dynamicElements = mapElement.querySelectorAll('.unit, .city, .granary, .construction, .attack-range-overlay');
             dynamicElements.forEach(el => el.remove());
 
             // Redraw all buildings first
@@ -889,6 +889,7 @@
                     if (building.type === 'GRANARY') {
                         buildingElement.className = `granary ${gameState.players[building.player].color}`;
                         buildingElement.textContent = 'GR';
+                        buildingElement.style.textShadow = '1px 1px 2px black';
                     } 
                     else if (building.type === 'GRANARY_CONSTRUCTION') {
                         buildingElement.className = `construction ${gameState.players[building.player].color}`;
@@ -1900,21 +1901,23 @@
                     building.turnsRemaining--;
 
                     if (building.progress >= building.totalProgress || building.turnsRemaining <= 0) {
-                        // Construction complete - replace with actual granary
-                        gameState.buildings.splice(i, 1); // Remove the construction site
-
+                        // Remove the construction site FIRST
+                        gameState.buildings.splice(i, 1);
+                        
+                        // Then add the completed granary
                         const granary = {
                             type: 'GRANARY',
                             x: building.x,
                             y: building.y,
                             player: player.id,
-                            health: 50 // Optional: Add health or other properties if needed
+                            health: 50
                         };
-
-                        gameState.buildings.push(granary); // Add the completed granary
+                        gameState.buildings.push(granary);
+                        
                         logMessage(`${player.name} has completed a Granary at (${building.x}, ${building.y})!`, player.id);
-
-                        gameState.mapDirty = true; // Mark the map as dirty for re-rendering
+                        
+                        // Force immediate re-render
+                        gameState.mapDirty = true;
                     }
                 }
             }
