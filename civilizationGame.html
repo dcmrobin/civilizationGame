@@ -856,27 +856,28 @@
             for (const building of gameState.buildings) {
                 const tileElement = document.querySelector(`.tile[data-x="${building.x}"][data-y="${building.y}"]`);
                 if (tileElement) {
-                    const buildingDef = BUILDING_TYPES[building.type];
-                    if (buildingDef) {
-                        if (building.type.endsWith('_CONSTRUCTION')) {
-                            // Construction site
-                            const buildingElement = document.createElement('div');
-                            buildingElement.className = `construction ${gameState.players[building.player].color}`;
-                            buildingElement.textContent = '🚧';
-                            buildingElement.title = `${buildingDef.name} under construction (${building.turnsRemaining} turns left)`;
-                            tileElement.appendChild(buildingElement);
-                        } else {
-                            // Completed building
-                            const buildingElement = document.createElement('div');
-                            buildingElement.className = `building ${gameState.players[building.player].color} ${building.type.toLowerCase()}`;
-                            buildingElement.textContent = buildingDef.icon;
-                            buildingElement.title = buildingDef.name;
-                            tileElement.appendChild(buildingElement);
-                        }
+                    if (building.type.endsWith('_CONSTRUCTION')) {
+                        // Construction site
+                        const buildingType = building.type.replace('_CONSTRUCTION', '');
+                        const buildingDef = BUILDING_TYPES[buildingType];
+                        const buildingElement = document.createElement('div');
+                        buildingElement.className = `construction ${gameState.players[building.player].color}`;
+                        buildingElement.textContent = '🚧';
+                        buildingElement.title = `${buildingDef.name} under construction (${building.turnsRemaining} turns left)`;
+                        tileElement.appendChild(buildingElement);
+                    } else {
+                        // Completed building
+                        const buildingDef = BUILDING_TYPES[building.type];
+                        const buildingElement = document.createElement('div');
+                        buildingElement.className = `building ${gameState.players[building.player].color} ${building.type.toLowerCase()}`;
+                        buildingElement.textContent = buildingDef.icon;
+                        buildingElement.title = buildingDef.name;
+                        tileElement.appendChild(buildingElement);
                     }
                 }
             }
 
+            // Rest of the renderMap function remains the same...
             // Then redraw all cities
             for (const player of gameState.players) {
                 for (const city of player.cities) {
@@ -884,21 +885,21 @@
                     if (tileElement) {
                         const cityElement = document.createElement('div');
                         cityElement.className = `city ${player.color}`;
-                        cityElement.textContent = city.name.slice(0, 2); // Display the first two letters
-                        cityElement.style.textShadow = '1px 1px 2px black'; // Add text shadow
+                        cityElement.textContent = city.name.slice(0, 2);
+                        cityElement.style.textShadow = '1px 1px 2px black';
                         tileElement.appendChild(cityElement);
                     }
                 }
             }
 
-            // Then redraw all units (so they appear above cities and buildings)
+            // Then redraw all units
             for (const player of gameState.players) {
                 for (const unit of player.units) {
                     const tileElement = document.querySelector(`.tile[data-x="${unit.x}"][data-y="${unit.y}"]`);
                     if (tileElement) {
                         const unitElement = document.createElement('div');
                         unitElement.className = `unit ${player.color}`;
-                        unitElement.textContent = unit.type.slice(0, 2); // Display the first two letters
+                        unitElement.textContent = unit.type.slice(0, 2);
                         if (unit.player === gameState.currentPlayer && unit.moves > 0) {
                             unitElement.style.boxShadow = '0 0 0 2px white';
                         }
@@ -1690,9 +1691,9 @@
             // Deduct gold immediately
             player.gold -= buildingDef.goldCost;
             
-            // Create construction site
+            // Create construction site with _CONSTRUCTION suffix
             const construction = {
-                type: `${buildingType}_CONSTRUCTION`,
+                type: `${buildingType}_CONSTRUCTION`,  // Note the _CONSTRUCTION suffix
                 x: x,
                 y: y,
                 player: player.id,
@@ -1720,7 +1721,7 @@
             
             // Add the completed building
             const building = {
-                type: buildingType,
+                type: buildingType,  // Without _CONSTRUCTION suffix
                 x: construction.x,
                 y: construction.y,
                 player: construction.player,
