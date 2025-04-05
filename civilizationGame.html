@@ -5,6 +5,25 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Simple Civilization</title>
     <style>
+        /* Add granary style */
+        .granary {
+            position: absolute;
+            width: 16px;
+            height: 16px;
+            top: 1px;
+            left: 1px;
+            background-color: #8B4513;
+            border: 1px solid rgb(0, 0, 0);
+            z-index: 2;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 9px;
+            font-weight: bold;
+            color: white;
+        }
+        
+        /* Existing styles remain the same */
         .unit {
             user-select: none;
             -webkit-user-select: none;
@@ -241,6 +260,9 @@
         
                 <h4>Research</h4>
                 <p>Click the "Technology" button to open the Technology Tree. Select a technology to start researching it. Researching technologies unlocks new units and buildings.</p>
+                
+                <h4>Granaries</h4>
+                <p>After researching Pottery, you can build Granaries next to your cities. Granaries provide +2 food to each city within 2 tiles. They cost gold to build and take several turns to complete.</p>
             </div>
             <button id="close-help">Close</button>
         </div>
@@ -304,6 +326,18 @@
             GALLEY: { name: 'Galley', cost: 30, goldCost: 120, strength: 10, move: 3, production: ['PORT'], naval: true, foodConsumption: 3 }
         };
 
+        // Add building types
+        const BUILDING_TYPES = {
+            GRANARY: { 
+                name: 'Granary', 
+                goldCost: 80, 
+                productionCost: 40, 
+                requires: 'POTTERY',
+                description: 'Provides +2 food to cities within 2 tiles',
+                foodBonus: 2
+            }
+        };
+
         const TECH_TREE = {
             POTTERY: { name: 'Pottery', cost: 50, leadsTo: ['WRITING'], description: 'Allows Granary building' },
             WRITING: { name: 'Writing', cost: 80, leadsTo: ['PHILOSOPHY'], description: 'Allows Libraries and diplomatic agreements' },
@@ -327,7 +361,8 @@
             technologies: {},
             unitDestinations: {},
             highlightedTiles: [],
-            mapDirty: true // Flag to track if map needs re-rendering
+            mapDirty: true, // Flag to track if map needs re-rendering
+            buildings: [] // Array to store all buildings in the game
         };
 
         // Perlin noise implementation
@@ -627,7 +662,8 @@
                     color: 'player1',
                     isHuman: true,
                     relations: {},
-                    exploredTiles: new Set()
+                    exploredTiles: new Set(),
+                    buildings: [] // Array to store player's buildings
                 }
             ];
 
@@ -647,7 +683,8 @@
                     color: aiColors[i],
                     isHuman: false,
                     relations: {},
-                    exploredTiles: new Set()
+                    exploredTiles: new Set(),
+                    buildings: [] // Array to store AI's buildings
                 });
             }
 
@@ -699,7 +736,7 @@
                     currentProduction: null,
                     buildings: [],
                     health: 100,
-                    food: calculateCityFood(cityTile.x, cityTile.y)
+                    food: calculateCityFood(cityTile.x, cityTile.y, player.id)
                 };
                 player.cities.push(city);
 
@@ -779,11 +816,23 @@
 
             const mapElement = document.getElementById('map');
 
-            // Clear only dynamic elements (units and city markers)
-            const dynamicElements = mapElement.querySelectorAll('.unit, .city');
+            // Clear only dynamic elements (units, cities, and buildings)
+            const dynamicElements = mapElement.querySelectorAll('.unit, .city, .granary');
             dynamicElements.forEach(el => el.remove());
 
-            // Redraw all cities first
+            // Redraw all buildings first
+            for (const building of gameState.buildings) {
+                const tileElement = document.querySelector(`.tile[data-x="${building.x}"][data-y="${building.y}"]`);
+                if (tileElement) {
+                    const buildingElement = document.createElement('div');
+                    buildingElement.className = `granary ${gameState.players[building.player].color}`;
+                    buildingElement.textContent = 'GR';
+                    buildingElement.style.textShadow = '1px 1px 2px black'; // Add text shadow
+                    tileElement.appendChild(buildingElement);
+                }
+            }
+
+            // Then redraw all cities
             for (const player of gameState.players) {
                 for (const city of player.cities) {
                     const tileElement = document.querySelector(`.tile[data-x="${city.x}"][data-y="${city.y}"]`);
@@ -797,7 +846,7 @@
                 }
             }
 
-            // Then redraw all units (so they appear above cities)
+            // Then redraw all units (so they appear above cities and buildings)
             for (const player of gameState.players) {
                 for (const unit of player.units) {
                     const tileElement = document.querySelector(`.tile[data-x="${unit.x}"][data-y="${unit.y}"]`);
@@ -847,7 +896,7 @@
                 }
             }
             
-            // Now render the dynamic elements (units, cities)
+            // Now render the dynamic elements (units, cities, buildings)
             gameState.mapDirty = true;
             renderMap();
         }
@@ -855,13 +904,23 @@
         // Show tile information
         function showTileInfo(tile, event) {
             const tileInfo = document.getElementById('tile-info');
-            tileInfo.innerHTML = `
+            let infoHTML = `
                 <strong>${tile.name}</strong><br>
                 Move Cost: ${tile.moveCost}<br>
                 Food: ${tile.food}<br>
                 Production: ${tile.production}<br>
                 Gold: ${tile.gold}
             `;
+
+            // Check if there's a building on this tile
+            const building = findBuildingAt(tile.x, tile.y);
+            if (building) {
+                const buildingType = BUILDING_TYPES[building.type];
+                const player = gameState.players[building.player];
+                infoHTML += `<br><strong>${buildingType.name}</strong> (${player.name})`;
+            }
+
+            tileInfo.innerHTML = infoHTML;
             tileInfo.style.display = 'block';
             moveTileInfo(event);
         }
@@ -948,6 +1007,12 @@
                 }
             }
 
+            // Check if there's a building on this tile (can't move onto buildings)
+            const building = findBuildingAt(x, y);
+            if (building && building.player !== unit.player) {
+                return false;
+            }
+
             // If ignoring units, skip the unit check
             if (ignoreUnits) {
                 return true;
@@ -967,16 +1032,23 @@
             return true; // Tile is valid for movement
         }
 
-        // Check if a unit can attack another unit or a city
+        // Check if a unit can attack another unit or a city or a building
         function canAttack(attacker, target) {
             if (attacker.type === 'SETTLER') return false;
 
             const attackerType = UNIT_TYPES[attacker.type];
 
-            if (target.health !== undefined) {
+            // Check if target is a city
+            if (target.health !== undefined && !target.type) {  // Cities have health but no type
                 return !attackerType.naval;
             }
 
+            // Check if target is a building
+            if (target.type && BUILDING_TYPES[target.type]) {
+                return true;  // All non-settler units can attack buildings
+            }
+
+            // Otherwise, target is a unit
             const defenderType = UNIT_TYPES[target.type];
             if (attackerType.naval && !defenderType.naval) return false;
 
@@ -1022,6 +1094,16 @@
                 attackerPlayer.relations[cityPlayer.id].hasMet = true;
                 cityPlayer.relations[attackerPlayer.id].hasMet = true;
                 performRangedAttack(unit, x, y);
+                return;
+            }
+
+            const building = findBuildingAt(x, y);
+            if (building && building.player !== unit.player) {
+                const attackerPlayer = gameState.players[unit.player];
+                const buildingPlayer = gameState.players[building.player];
+                attackerPlayer.relations[buildingPlayer.id].hasMet = true;
+                buildingPlayer.relations[attackerPlayer.id].hasMet = true;
+                attackBuilding(unit, building);
                 return;
             }
 
@@ -1072,11 +1154,14 @@
 
             const targetUnit = findUnitAt(targetX, targetY);
             const targetCity = findCityAt(targetX, targetY);
+            const targetBuilding = findBuildingAt(targetX, targetY);
 
             if (targetUnit && targetUnit.player !== attacker.player) {
                 resolveRangedCombat(attacker, targetUnit);
             } else if (targetCity && targetCity.player !== attacker.player) {
                 resolveRangedCombat(attacker, targetCity);
+            } else if (targetBuilding && targetBuilding.player !== attacker.player) {
+                attackBuilding(attacker, targetBuilding);
             } else {
                 logMessage(`${attacker.type} has no valid target at (${targetX}, ${targetY}).`, attacker.player);
             }
@@ -1157,6 +1242,51 @@
             }
 
             attacker.hasAttacked = true;
+        }
+
+        function attackBuilding(attacker, building) {
+            const attackerType = UNIT_TYPES[attacker.type];
+            const attackerPlayer = gameState.players[attacker.player];
+            const buildingPlayer = gameState.players[building.player];
+
+            if (attacker.hasAttacked) {
+                logMessage(`${attacker.type} has already attacked this turn.`, attacker.player);
+                return;
+            }
+
+            // Buildings have 50 health by default
+            const damage = attackerType.strength * (1 + Math.random() * 0.2);
+            building.health -= damage;
+
+            attackerPlayer.relations[buildingPlayer.id].hasMet = true;
+            buildingPlayer.relations[attackerPlayer.id].hasMet = true;
+
+            attackerPlayer.relations[buildingPlayer.id].attitude = Math.max(0, attackerPlayer.relations[buildingPlayer.id].attitude - 5);
+            buildingPlayer.relations[attackerPlayer.id].attitude = Math.max(0, buildingPlayer.relations[attackerPlayer.id].attitude - 5);
+
+            logMessage(`${attackerPlayer.name}'s ${attacker.type} dealt ${Math.round(damage)} damage to ${building.type}.`, attacker.player, building.player);
+
+            if (building.health <= 0) {
+                destroyBuilding(building);
+                logMessage(`${attackerPlayer.name} has destroyed the ${building.type}!`, attacker.player, building.player);
+            }
+
+            attacker.hasAttacked = true;
+            gameState.mapDirty = true;
+            renderMap();
+        }
+
+        function destroyBuilding(building) {
+            // Remove the building from the game state
+            gameState.buildings = gameState.buildings.filter(b => b !== building);
+            
+            // Also remove it from the player's buildings array if it exists there
+            const player = gameState.players[building.player];
+            if (player.buildings) {
+                player.buildings = player.buildings.filter(b => b !== building);
+            }
+            
+            gameState.mapDirty = true;
         }
 
         function highlightAttackRange(unit) {
@@ -1286,7 +1416,7 @@
                 currentProduction: null,
                 buildings: [],
                 health: 100,
-                food: calculateCityFood(x, y)
+                food: calculateCityFood(x, y, player.id)
             };
 
             player.cities.push(city);
@@ -1304,7 +1434,7 @@
             return player.cities.length * unitsPerCity;
         }
 
-        function calculateCityFood(x, y) {
+        function calculateCityFood(x, y, playerId) {  // Changed to accept playerId instead of player object
             let food = 2; // Base food value for the city itself
             const directions = [
                 { dx: 0, dy: -1 }, { dx: 1, dy: 0 },
@@ -1320,6 +1450,16 @@
                 if (ny >= 0 && ny < gameState.map.length && nx >= 0 && nx < gameState.map[0].length) {
                     const tile = gameState.map[ny][nx];
                     food += tile.food || 0;
+                }
+            }
+
+            // Add food from nearby granaries
+            for (const building of gameState.buildings) {
+                if (building.player === playerId && building.type === 'GRANARY') {  // Now using playerId directly
+                    const distance = Math.abs(building.x - x) + Math.abs(building.y - y);
+                    if (distance <= 2) { // Granaries affect cities within 2 tiles
+                        food += BUILDING_TYPES.GRANARY.foodBonus;
+                    }
                 }
             }
 
@@ -1408,6 +1548,84 @@
                 if (city) return city;
             }
             return null;
+        }
+
+        function findBuildingAt(x, y) {
+            return gameState.buildings.find(b => b.x === x && b.y === y);
+        }
+
+        function canBuildGranary(player, x, y) {
+            // Check if player has researched Pottery
+            if (!player.researchedTechs.has('POTTERY')) {
+                return false;
+            }
+
+            // Check if player has enough gold
+            if (player.gold < BUILDING_TYPES.GRANARY.goldCost) {
+                return false;
+            }
+
+            // Check if tile is adjacent to one of the player's cities
+            const directions = [
+                { dx: 0, dy: -1 }, { dx: 1, dy: 0 },
+                { dx: 0, dy: 1 }, { dx: -1, dy: 0 }
+            ];
+
+            for (const dir of directions) {
+                const nx = x + dir.dx;
+                const ny = y + dir.dy;
+
+                if (ny >= 0 && ny < gameState.map.length && nx >= 0 && nx < gameState.map[0].length) {
+                    const city = findCityAt(nx, ny);
+                    if (city && city.player === player.id) {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        function buildGranary(player, x, y) {
+            if (!canBuildGranary(player, x, y)) {
+                return false;
+            }
+
+            // Check if there's already a building on this tile
+            if (findBuildingAt(x, y)) {
+                return false;
+            }
+
+            // Check if the tile is valid (not water)
+            const tile = gameState.map[y][x];
+            if (tile.name === 'Ocean' || tile.name === 'Coast') {
+                return false;
+            }
+
+            // Deduct gold cost
+            player.gold -= BUILDING_TYPES.GRANARY.goldCost;
+
+            // Create the granary
+            const granary = {
+                type: 'GRANARY',
+                x: x,
+                y: y,
+                player: player.id,
+                health: 50, // Buildings have health and can be attacked
+                productionProgress: 0,
+                productionCost: BUILDING_TYPES.GRANARY.productionCost
+            };
+
+            gameState.buildings.push(granary);
+            player.buildings.push(granary);
+
+            logMessage(`${player.name} started building a Granary at (${x}, ${y}).`, player.id);
+
+            gameState.mapDirty = true;
+            renderMap();
+            updateUI();
+
+            return true;
         }
 
         function aiTradeWithPlayer(aiPlayer) {
@@ -1556,7 +1774,7 @@
 
             // First calculate base food from cities
             for (const city of player.cities) {
-                city.food = calculateCityFood(city.x, city.y);
+                city.food = calculateCityFood(city.x, city.y, player.id);
                 totalFood += city.food;
             }
 
@@ -1577,6 +1795,36 @@
                     unit.moves = UNIT_TYPES[unit.type].move;
                 }
                 unit.hasAttacked = false;
+            }
+
+            // Process building construction
+            for (const building of gameState.buildings) {
+                if (building.player === player.id && building.productionProgress < building.productionCost) {
+                    // Get adjacent city's production
+                    let production = 0;
+                    const directions = [
+                        { dx: 0, dy: -1 }, { dx: 1, dy: 0 },
+                        { dx: 0, dy: 1 }, { dx: -1, dy: 0 }
+                    ];
+                    
+                    for (const dir of directions) {
+                        const nx = building.x + dir.dx;
+                        const ny = building.y + dir.dy;
+                        
+                        if (ny >= 0 && ny < gameState.map.length && nx >= 0 && nx < gameState.map[0].length) {
+                            const city = findCityAt(nx, ny);
+                            if (city && city.player === player.id) {
+                                production += calculateCityProduction(nx, ny);
+                            }
+                        }
+                    }
+                    
+                    building.productionProgress += production;
+                    
+                    if (building.productionProgress >= building.productionCost) {
+                        logMessage(`${player.name} has completed construction of a ${building.type}!`, player.id);
+                    }
+                }
             }
 
             // Handle food shortage
@@ -1698,7 +1946,7 @@
 
                     // Avoid tiles occupied by other units or cities unless it's the target
                     const isTargetTile = nx === targetX && ny === targetY;
-                    if (!isTargetTile && (findCityAt(nx, ny) || findUnitAt(nx, ny))) continue;
+                    if (!isTargetTile && (findCityAt(nx, ny) || findUnitAt(nx, ny) || findBuildingAt(nx, ny))) continue;
 
                     const tile = gameState.map[ny][nx];
                     const moveCost = tile.moveCost || 1;
@@ -1725,7 +1973,27 @@
             // Clear highlights immediately when starting movement
             clearAttackRangeHighlights();
             
-            if (gameState.selectedCity) return;
+            if (gameState.selectedCity) {
+                // Check if we're trying to build a granary
+                const currentPlayer = gameState.players[gameState.currentPlayer];
+                const city = gameState.selectedCity;
+                
+                // Check if the clicked tile is adjacent to the city
+                const dx = Math.abs(city.x - x);
+                const dy = Math.abs(city.y - y);
+                const isAdjacent = (dx === 1 && dy === 0) || (dx === 0 && dy === 1);
+                
+                if (isAdjacent && !findBuildingAt(x, y)) {
+                    // Check if player can build a granary here
+                    if (canBuildGranary(currentPlayer, x, y)) {
+                        const confirmBuild = confirm("Do you want to build a Granary here? It will cost 80 gold.");
+                        if (confirmBuild) {
+                            buildGranary(currentPlayer, x, y);
+                        }
+                    }
+                }
+                return;
+            }
 
             if (gameState.selectedUnit && gameState.selectedUnit.player === gameState.currentPlayer) {
                 const selectedUnit = gameState.selectedUnit;
@@ -1734,9 +2002,11 @@
                 if (unitType.range) {
                     const targetUnit = findUnitAt(x, y);
                     const targetCity = findCityAt(x, y);
+                    const targetBuilding = findBuildingAt(x, y);
 
                     if ((targetUnit && targetUnit.player !== selectedUnit.player) || 
-                        (targetCity && targetCity.player !== selectedUnit.player)) {
+                        (targetCity && targetCity.player !== selectedUnit.player) ||
+                        (targetBuilding && targetBuilding.player !== selectedUnit.player)) {
                         performRangedAttack(selectedUnit, x, y);
                         gameState.mapDirty = true;
                         renderMap();
@@ -1805,6 +2075,22 @@
                             }
                         }
                     }
+
+                    for (const enemyBuilding of gameState.buildings) {
+                        if (enemyBuilding.player !== aiPlayer.id) {
+                            const dx = Math.abs(unit.x - enemyBuilding.x);
+                            const dy = Math.abs(unit.y - enemyBuilding.y);
+
+                            // Ensure the target is within range and only orthogonal
+                            if ((dx === 0 || dy === 0) && dx + dy <= unitType.range) {
+                                const distance = dx + dy;
+                                if (distance < closestDistance) {
+                                    closestTarget = enemyBuilding;
+                                    closestDistance = distance;
+                                }
+                            }
+                        }
+                    }
                 }
             }
 
@@ -1819,6 +2105,40 @@
 
             const threats = assessThreats(aiPlayer);
             const expansionOpportunities = findExpansionOpportunities(aiPlayer);
+
+            // AI decision to build granaries
+            if (aiPlayer.researchedTechs.has('POTTERY') && aiPlayer.gold >= BUILDING_TYPES.GRANARY.goldCost) {
+                // Check if we have cities without adjacent granaries
+                for (const city of aiPlayer.cities) {
+                    const hasAdjacentGranary = gameState.buildings.some(b => 
+                        b.player === aiPlayer.id && 
+                        b.type === 'GRANARY' &&
+                        (Math.abs(b.x - city.x) + Math.abs(b.y - city.y)) === 1
+                    );
+                    
+                    if (!hasAdjacentGranary && foodBalance < 5) {
+                        // Try to find an adjacent tile to build a granary
+                        const directions = [
+                            { dx: 0, dy: -1 }, { dx: 1, dy: 0 },
+                            { dx: 0, dy: 1 }, { dx: -1, dy: 0 }
+                        ];
+                        
+                        for (const dir of directions) {
+                            const nx = city.x + dir.dx;
+                            const ny = city.y + dir.dy;
+                            
+                            if (ny >= 0 && ny < gameState.map.length && nx >= 0 && nx < gameState.map[0].length) {
+                                const tile = gameState.map[ny][nx];
+                                if (tile.name !== 'Ocean' && tile.name !== 'Coast' && !findBuildingAt(nx, ny)) {
+                                    if (buildGranary(aiPlayer, nx, ny)) {
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
 
             // Smarter city production logic
             for (const city of aiPlayer.cities) {
@@ -1931,34 +2251,32 @@
 
                         // Ensure the settler does not move again this turn
                         unit.moves = 0;
-                    }
-
-                    if (unitType.range) {
+                    } else if (unitType.range) {
                         const target = findRangedTarget(unit, aiPlayer);
                         if (target && target.player !== undefined) {
                             const targetPlayer = gameState.players[target.player];
-                            if (aiPlayer.relations[targetPlayer.id]?.attitude >= 60) {
-                                continue; // Skip attacking if relations are "Friendly" or better
+                            if (aiPlayer.relations[targetPlayer.id]?.attitude < 60) {
+                                performRangedAttack(unit, target.x, target.y);
+                                continue;
                             }
-                            performRangedAttack(unit, target.x, target.y);
-                            continue;
+                        }
+                    } else {
+                        const target = findBestTarget(unit, aiPlayer, threats, expansionOpportunities);
+                        if (target) {
+                            const targetPlayer = gameState.players[target.player];
+                            if (aiPlayer.relations[targetPlayer.id]?.attitude < 60) {
+                                const path = findPath(unit.x, unit.y, target.x, target.y, unit);
+                                if (path.length > 0) {
+                                    const nextStep = path[0];
+                                    moveUnit(unit, nextStep.x, nextStep.y);
+                                    continue;
+                                }
+                            }
                         }
                     }
 
-                    const target = findBestTarget(unit, aiPlayer, threats, expansionOpportunities);
-                    if (target && target.player !== undefined) {
-                        const targetPlayer = gameState.players[target.player];
-                        if (aiPlayer.relations[targetPlayer.id]?.attitude >= 60) {
-                            continue; // Skip attacking if relations are "Friendly" or better
-                        }
-                        const path = findPath(unit.x, unit.y, target.x, target.y, unit);
-                        if (path.length > 0) {
-                            const nextStep = path[0];
-                            moveUnit(unit, nextStep.x, nextStep.y);
-                        }
-                    } else {
-                        explore(unit, aiPlayer);
-                    }
+                    // If we get here, no valid target was found - explore instead
+                    explore(unit, aiPlayer);
                 }
             }
         }
@@ -1997,28 +2315,41 @@
         }
 
         function explore(unit, aiPlayer) {
-            const radius = 7; // Exploration radius
+            const radius = 7;
             let targetTile = null;
+            let bestScore = -Infinity;
 
-            // Pick a random tile within the radius
-            for (let attempts = 0; attempts < 10; attempts++) {
-                const randomX = unit.x + Math.floor(Math.random() * (radius * 2 + 1)) - radius;
-                const randomY = unit.y + Math.floor(Math.random() * (radius * 2 + 1)) - radius;
+            // Look for the most valuable unexplored tile within radius
+            for (let dy = -radius; dy <= radius; dy++) {
+                for (let dx = -radius; dx <= radius; dx++) {
+                    const nx = unit.x + dx;
+                    const ny = unit.y + dy;
 
-                // Ensure the tile is within bounds and valid for movement
-                if (
-                    randomY >= 0 && randomY < gameState.map.length &&
-                    randomX >= 0 && randomX < gameState.map[0].length &&
-                    canMoveTo(unit, randomX, randomY) && // Ensure the tile is valid for movement
-                    !findCityAt(randomX, randomY) && // Exclude tiles with cities
-                    !findUnitAt(randomX, randomY) // Avoid tiles with other units
-                ) {
-                    targetTile = { x: randomX, y: randomY };
-                    break;
+                    if (ny >= 0 && ny < gameState.map.length && 
+                        nx >= 0 && nx < gameState.map[0].length) {
+                        
+                        // Skip if tile is occupied or invalid
+                        if (!canMoveTo(unit, nx, ny, true) || 
+                            findCityAt(nx, ny) || 
+                            findUnitAt(nx, ny) || 
+                            findBuildingAt(nx, ny)) {
+                            continue;
+                        }
+
+                        // Score based on distance and tile value
+                        const distance = Math.abs(dx) + Math.abs(dy);
+                        const tile = gameState.map[ny][nx];
+                        const tileValue = (tile.food || 0) + (tile.production || 0) + (tile.gold || 0);
+                        const score = tileValue - distance * 2;
+
+                        if (score > bestScore) {
+                            bestScore = score;
+                            targetTile = { x: nx, y: ny };
+                        }
+                    }
                 }
             }
 
-            // If a valid target tile is found, move toward it
             if (targetTile) {
                 const path = findPath(unit.x, unit.y, targetTile.x, targetTile.y, unit);
                 if (path.length > 0) {
@@ -2028,22 +2359,16 @@
                 }
             }
 
-            // If no valid target is found, move randomly
+            // Fallback random movement if no target found
             const directions = [
-                { dx: 0, dy: -1 }, // Up
-                { dx: 1, dy: 0 },  // Right
-                { dx: 0, dy: 1 },  // Down
-                { dx: -1, dy: 0 }  // Left
-            ];
-            directions.sort(() => Math.random() - 0.5); // Shuffle directions
+                { dx: 0, dy: -1 }, { dx: 1, dy: 0 },
+                { dx: 0, dy: 1 }, { dx: -1, dy: 0 }
+            ].sort(() => Math.random() - 0.5);
+
             for (const dir of directions) {
                 const nx = unit.x + dir.dx;
                 const ny = unit.y + dir.dy;
-                if (
-                    canMoveTo(unit, nx, ny) && // Ensure the tile is valid for movement
-                    !findCityAt(nx, ny) && // Exclude tiles with cities
-                    !findUnitAt(nx, ny) // Avoid tiles with other units
-                ) {
+                if (canMoveTo(unit, nx, ny, true)) {
                     moveUnit(unit, nx, ny);
                     break;
                 }
@@ -2074,7 +2399,7 @@
                 for (let x = 0; x < gameState.map[y].length; x++) {
                     const tile = gameState.map[y][x];
 
-                    if (tile.name !== 'Ocean' && tile.name !== 'Coast' && !findCityAt(x, y)) {
+                    if (tile.name !== 'Ocean' && tile.name !== 'Coast' && !findCityAt(x, y) && !findBuildingAt(x, y)) {
                         const score = evaluateTileScore(x, y, aiPlayer);
                         if (score > 0) {
                             opportunities.push({ x, y, score });
@@ -2108,6 +2433,7 @@
                 let closestDistance = Infinity;
 
                 for (const hostilePlayer of hostilePlayers) {
+                    // Check enemy units
                     for (const enemyUnit of hostilePlayer.units) {
                         const dist = Math.abs(unit.x - enemyUnit.x) + Math.abs(unit.y - enemyUnit.y);
                         if (dist < closestDistance && canAttack(unit, enemyUnit)) {
@@ -2116,11 +2442,23 @@
                         }
                     }
 
+                    // Check enemy cities
                     for (const enemyCity of hostilePlayer.cities) {
                         const dist = Math.abs(unit.x - enemyCity.x) + Math.abs(unit.y - enemyCity.y);
                         if (dist < closestDistance) {
                             closestDistance = dist;
                             closestTarget = enemyCity;
+                        }
+                    }
+
+                    // Check enemy granaries
+                    for (const building of gameState.buildings) {
+                        if (building.player === hostilePlayer.id && building.type === 'GRANARY') {
+                            const dist = Math.abs(unit.x - building.x) + Math.abs(unit.y - building.y);
+                            if (dist < closestDistance) {
+                                closestDistance = dist;
+                                closestTarget = building;
+                            }
                         }
                     }
                 }
@@ -2132,6 +2470,7 @@
                 return expansionOpportunities[0];
             }
 
+            // Default to exploring if no target found
             return null;
         }
 
@@ -2175,6 +2514,16 @@
                         if (dist < closestDistance) {
                             closestDistance = dist;
                             closestTarget = enemyCity;
+                        }
+                    }
+
+                    for (const enemyBuilding of gameState.buildings) {
+                        if (enemyBuilding.player === player.id) {
+                            const dist = Math.abs(unit.x - enemyBuilding.x) + Math.abs(unit.y - enemyBuilding.y);
+                            if (dist < closestDistance) {
+                                closestDistance = dist;
+                                closestTarget = enemyBuilding;
+                            }
                         }
                     }
                 }
