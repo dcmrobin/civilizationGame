@@ -912,12 +912,25 @@
                 Gold: ${tile.gold}
             `;
 
-            // Check if there's a building on this tile
+            // Check for city
+            const city = findCityAt(tile.x, tile.y);
+            if (city) {
+                const cityPlayer = gameState.players[city.player];
+                infoHTML += `<br><strong>City:</strong> ${city.name} (${cityPlayer.name})`;
+            }
+
+            // Check for unit
+            const unit = findUnitAt(tile.x, tile.y);
+            if (unit) {
+                const unitPlayer = gameState.players[unit.player];
+                infoHTML += `<br><strong>Unit:</strong> ${UNIT_TYPES[unit.type].name} (${unitPlayer.name})`;
+            }
+
+            // Check for building
             const building = findBuildingAt(tile.x, tile.y);
             if (building) {
-                const buildingType = BUILDING_TYPES[building.type];
-                const player = gameState.players[building.player];
-                infoHTML += `<br><strong>${buildingType.name}</strong> (${player.name})`;
+                const buildingPlayer = gameState.players[building.player];
+                infoHTML += `<br><strong>Building:</strong> ${BUILDING_TYPES[building.type].name} (${buildingPlayer.name})`;
             }
 
             tileInfo.innerHTML = infoHTML;
@@ -1021,12 +1034,12 @@
             // Check if another unit is already on the tile
             const otherUnit = findUnitAt(x, y);
             if (otherUnit) {
-                // Allow movement only if the other unit belongs to an enemy and the unit can attack
-                if (otherUnit.player !== unit.player) {
-                    return canAttack(unit, otherUnit);
-                } else {
-                    return false; // Cannot move onto a tile occupied by a friendly unit
+                // Prevent moving onto any friendly unit's tile
+                if (otherUnit.player === unit.player) {
+                    return false;
                 }
+                // Only allow movement if attacking an enemy
+                return canAttack(unit, otherUnit);
             }
 
             return true; // Tile is valid for movement
@@ -2140,7 +2153,7 @@
                 }
             }
 
-            // Smarter city production logic
+            // City production logic
             for (const city of aiPlayer.cities) {
                 if (!city.currentProduction) {
                     const options = [];
@@ -2581,6 +2594,7 @@
                                 <div class="relation-text">${getRelationText(relation.attitude)} (${relation.attitude})</div>
                             </div>
                             <button onclick="proposeTrade(${player.id})">Propose Trade</button>
+                            <button onclick="declareWar(${player.id})" style="background-color: red; color: white;">Declare War</button>
                         `;
                         relationsContainer.appendChild(relationElement);
                     } else {
@@ -2592,6 +2606,19 @@
             }
             
             document.getElementById('diplomacy-panel').style.display = 'block';
+        }
+
+        function declareWar(targetPlayerId) {
+            const currentPlayer = gameState.players[gameState.currentPlayer];
+            const targetPlayer = gameState.players[targetPlayerId];
+
+            // Set reputation to 0 on both sides
+            currentPlayer.relations[targetPlayerId].attitude = 0;
+            targetPlayer.relations[currentPlayer.id].attitude = 0;
+
+            logMessage(`${currentPlayer.name} has declared war on ${targetPlayer.name}!`, currentPlayer.id, targetPlayerId);
+
+            updateUI();
         }
 
         function proposeTrade(aiPlayerId) {
