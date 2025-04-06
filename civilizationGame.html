@@ -342,12 +342,12 @@
         };
 
         const UNIT_TYPES = {
-            SETTLER: { name: 'Settler', cost: 30, goldCost: 50, strength: 0, move: 1, production: ['CITY'], foodConsumption: 2 },
-            SCOUT: { name: 'Scout', cost: 5, goldCost: 10, strength: 5, move: 2, production: ['CITY'], foodConsumption: 1 },
-            WARRIOR: { name: 'Warrior', cost: 10, goldCost: 30, strength: 20, move: 1, range: 1, production: ['CITY'], foodConsumption: 1 },
-            ARCHER: { name: 'Archer', cost: 20, goldCost: 40, strength: 10, move: 1, range: 2, production: ['CITY'], requires: 'ARCHERY', foodConsumption: 1 },
-            SPEARMAN: { name: 'Spearman', cost: 20, goldCost: 50, strength: 30, move: 1, range: 1, production: ['CITY'], requires: 'BRONZE_WORKING', foodConsumption: 1 },
-            GALLEY: { name: 'Galley', cost: 30, goldCost: 120, strength: 10, move: 3, production: ['PORT'], naval: true, foodConsumption: 3 }
+            SETTLER: { name: 'Settler', description: "Able to found cities", cost: 30, goldCost: 50, strength: 0, move: 1, production: ['CITY'], foodConsumption: 2 },
+            SCOUT: { name: 'Scout', cost: 5, description: "Able to move quicker over harder terrain", goldCost: 10, strength: 5, move: 2, production: ['CITY'], foodConsumption: 1 },
+            WARRIOR: { name: 'Warrior', description: "Basic attack unit", cost: 10, goldCost: 30, strength: 20, move: 1, range: 1, production: ['CITY'], foodConsumption: 1 },
+            ARCHER: { name: 'Archer', description: "Ranged attack unit", cost: 20, goldCost: 40, strength: 10, move: 1, range: 2, production: ['CITY'], requires: 'ARCHERY', foodConsumption: 1 },
+            SPEARMAN: { name: 'Spearman', description: "Stronger attack unit", cost: 20, goldCost: 50, strength: 30, move: 1, range: 1, production: ['CITY'], requires: 'BRONZE_WORKING', foodConsumption: 1 },
+            GALLEY: { name: 'Galley', description: "uh", cost: 30, goldCost: 120, strength: 10, move: 3, production: ['PORT'], requires: 'SEAFARING', naval: true, foodConsumption: 3 }
         };
 
         // Building types
@@ -371,7 +371,7 @@
                 goldCost: 100, 
                 productionCost: 60, 
                 requires: 'WRITING',
-                description: 'Increases research output by 50% in nearby cities',
+                description: 'Increases research output by 10% in nearby cities',
                 effects: {
                     researchMultiplier: 1.1
                 },
@@ -2278,38 +2278,69 @@
             const expansionOpportunities = findExpansionOpportunities(aiPlayer);
 
             // AI building construction logic
-            for (const [buildingType, buildingDef] of Object.entries(BUILDING_TYPES)) {
-                if (aiPlayer.researchedTechs.has(buildingDef.requires) && 
-                    aiPlayer.gold >= buildingDef.goldCost) {
-                    
-                    // Check each city for building opportunities
-                    for (const city of aiPlayer.cities) {
-                        const hasAdjacentBuilding = gameState.buildings.some(b => 
-                            b.player === aiPlayer.id && 
-                            b.type === buildingType &&
-                            Math.abs(b.x - city.x) + Math.abs(b.y - city.y) === 1
-                        );
-                        
-                        if (!hasAdjacentBuilding) {
-                            // Find valid adjacent tile
-                            const directions = [
-                                { dx: 0, dy: -1 }, { dx: 1, dy: 0 },
-                                { dx: 0, dy: 1 }, { dx: -1, dy: 0 }
-                            ].sort(() => Math.random() - 0.5); // Randomize direction order
+            for (const city of aiPlayer.cities) {
+                // Skip if there is already an ongoing construction near the city
+                const hasOngoingConstruction = gameState.buildings.some(b =>
+                    b.type.endsWith('_CONSTRUCTION') &&
+                    b.player === aiPlayer.id &&
+                    Math.abs(b.x - city.x) <= 1 &&
+                    Math.abs(b.y - city.y) <= 1
+                );
+                if (hasOngoingConstruction) continue;
+
+                // Evaluate all possible buildings
+                const buildingOptions = Object.entries(BUILDING_TYPES)
+                    .filter(([buildingType, buildingDef]) => {
+                        // Check if the AI has researched the required technology
+                        if (buildingDef.requires && !aiPlayer.researchedTechs.has(buildingDef.requires)) {
+                            return false;
+                        }
+
+                        // Check if the AI has enough gold
+                        if (aiPlayer.gold < buildingDef.goldCost) {
+                            return false;
+                        }
+
+                        // Check if the building is a library and if one already exists near the city
+                        if (buildingType === 'LIBRARY') {
+                            const hasLibrary = gameState.buildings.some(b =>
+                                b.type === 'LIBRARY' &&
+                                b.player === aiPlayer.id &&
+                                Math.abs(b.x - city.x) + Math.abs(b.y - city.y) <= 1
+                            );
+                            if (hasLibrary) {
+                                return false;
+                            }
+                        }
+
+                        return true;
+                    });
+
+                // Prioritize buildings (e.g., libraries over granaries)
+                buildingOptions.sort(([typeA, defA], [typeB, defB]) => {
+                    if (typeA === 'LIBRARY') return -1; // Libraries are prioritized
+                    if (typeB === 'LIBRARY') return 1;
+                    return defA.goldCost - defB.goldCost; // Otherwise, prioritize cheaper buildings
+                });
+
+                // Attempt to build the highest-priority building
+                for (const [buildingType, buildingDef] of buildingOptions) {
+                    const directions = [
+                        { dx: 0, dy: -1 }, { dx: 1, dy: 0 },
+                        { dx: 0, dy: 1 }, { dx: -1, dy: 0 }
+                    ].sort(() => Math.random() - 0.5); // Randomize direction order
+
+                    for (const dir of directions) {
+                        const nx = city.x + dir.dx;
+                        const ny = city.y + dir.dy;
+
+                        if (ny >= 0 && ny < gameState.map.length &&
+                            nx >= 0 && nx < gameState.map[0].length &&
+                            canBuildBuilding(aiPlayer, buildingType, nx, ny)) {
                             
-                            for (const dir of directions) {
-                                const nx = city.x + dir.dx;
-                                const ny = city.y + dir.dy;
-                                
-                                if (ny >= 0 && ny < gameState.map.length &&
-                                    nx >= 0 && nx < gameState.map[0].length &&
-                                    canBuildBuilding(aiPlayer, buildingType, nx, ny)) {
-                                    
-                                    if (buildBuilding(aiPlayer, buildingType, nx, ny)) {
-                                        logMessage(`${aiPlayer.name} started building a ${buildingDef.name} near ${city.name}.`, aiPlayer.id);
-                                        break;
-                                    }
-                                }
+                            if (buildBuilding(aiPlayer, buildingType, nx, ny)) {
+                                logMessage(`${aiPlayer.name} started building a ${buildingDef.name} near ${city.name}.`, aiPlayer.id);
+                                break;
                             }
                         }
                     }
@@ -2930,7 +2961,7 @@
 
             cityInfoElement.innerHTML = `
                 <h4>${city.name}</h4>
-                <p>Production: ${city.production}/${city.currentProduction ? UNIT_TYPES[city.currentProduction].cost : '0'}</p>
+                <p>Production: ${city.production}/${city.currentProduction ? UNIT_TYPES[city.currentProduction]?.cost : '0'}</p>
                 <p>Gold: ${player.gold}</p>
             `;
 
@@ -2941,11 +2972,20 @@
                 <div id="building-production"></div>
             `;
 
+            // Check if there is an ongoing construction near the city
+            const hasOngoingConstruction = gameState.buildings.some(b =>
+                b.type.endsWith('_CONSTRUCTION') &&
+                b.player === player.id &&
+                Math.abs(b.x - city.x) <= 1 &&
+                Math.abs(b.y - city.y) <= 1
+            );
+
             // Unit production
             const unitProductionElement = document.getElementById('unit-production');
             for (const [unitType, unitDef] of Object.entries(UNIT_TYPES)) {
                 const button = document.createElement('button');
                 button.textContent = `${unitDef.name} (${unitDef.goldCost} gold)`;
+                button.title = unitDef.description || "No description available"; // Add description as tooltip
                 button.onclick = () => startUnitProduction(unitType, city.x, city.y);
                 unitProductionElement.appendChild(button);
             }
@@ -2960,6 +3000,13 @@
 
                 const button = document.createElement('button');
                 button.textContent = `${buildingDef.name} (${buildingDef.goldCost} gold)`;
+                button.title = buildingDef.description || "No description available"; // Add description as tooltip
+
+                // Disable the button if there is an ongoing construction
+                if (hasOngoingConstruction) {
+                    button.disabled = true;
+                    button.title = "A building is already under construction near this city.";
+                }
 
                 // Check if the building is a library and if one already exists near the city
                 if (buildingType === 'LIBRARY') {
