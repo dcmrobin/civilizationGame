@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Civilization</title>
+    <link rel="stylesheet" href="styles/civilizationGame.css">
+</head>
+<body>
+    <div id="game-container">
+        <h1>Simple Civilization</h1>
+
+        <div id="log-panel" style="width: 800px; height: 150px; overflow-y: auto; background-color: #f8f8f8; border: 1px solid #999; padding: 1px; margin-bottom: 1px;">
+            <h3>Game Log</h3>
+            <div id="log-content" style="height: 90px; overflow-y: auto;"></div>
+        </div>
+
+        <div id="help-panel" style="display: none; width: 800px; padding: 10px; background-color: #eee; border: 1px solid #999; margin-bottom: 10px;">
+            <h3>Game Instructions</h3>
+            <div id="help-content">
+                <h4>Game Objective</h4>
+                <p>Expand your civilization by founding cities, researching technologies, and managing resources. Defeat your enemies or achieve technological superiority to win the game.</p>
+        
+                <h4>Basic Controls</h4>
+                <ul>
+                    <p>Pan around the map using the middle mouse button and dragging.</p>
+                    <li><strong>End Turn:</strong> Click the "End Turn" button to finish your turn and let other players (AI) take their turns.</li>
+                    <li><strong>Diplomacy:</strong> Click the "Diplomacy" button to view your relations with other civilizations and propose trades.</li>
+                    <li><strong>Technology:</strong> Click the "Technology" button to research new technologies.</li>
+                </ul>
+        
+                <h4>Moving Units</h4>
+                <p>Select a unit by clicking on it. Then, right-click on a tile to set a destination. The unit will move toward the destination once every turn.</p>
+        
+                <h4>Combat</h4>
+                <p>Move your units in range (the red squares) of other units, and then right-click the unit you want to attack- that unit will keep attacking the selected unit until it is dead or you tell it to do something else. Units can only attack once per turn.</p>
+        
+                <h4>Diplomacy</h4>
+                <p>Use the Diplomacy panel to view your relations with other civilizations. You can propose trades to improve relations.</p>
+        
+                <h4>City Management</h4>
+                <p>Click on one of your cities to manage it. You can assign production tasks, such as building units.</p>
+        
+                <h4>Research</h4>
+                <p>Click the "Technology" button to open the Technology Tree. Select a technology to start researching it. Researching technologies unlocks new units and buildings.</p>
+                
+                <h4>Buildings</h4>
+                <p>After researching the required technology, you can build various buildings adjacent to your cities. Each building provides different benefits to nearby cities.</p>
+            </div>
+            <button id="close-help">Close</button>
+        </div>
+
+        <div id="info-panel">
+            <div>Turn: <span id="turn-counter">1</span></div>
+            <div>Food capacity: <span id="food-counter">0</span></div>
+            <div>Gold: <span id="gold-counter">50</span></div>
+            <div>Research: <span id="research-counter">0</span>/<span id="research-needed">50</span> (<span id="current-tech">None</span>)</div>
+        </div>
+        <div id="controls">
+            <button id="end-turn-btn">End Turn</button>
+            <button id="diplomacy-btn">Diplomacy</button>
+            <button id="tech-btn">Technology</button>
+            <button id="help-btn">Help</button>
+        </div>
+        <div id="map-container">
+            <div id="map"></div>
+        </div>
+        <div id="tile-info" style="display: none; position: absolute; background-color: #fff; border: 1px solid #999; padding: 5px; font-size: 12px; z-index: 100;"></div>
+        
+        <div id="diplomacy-panel">
+            <h3>Diplomatic Relations</h3>
+            <div id="relations-container"></div>
+            <button id="close-diplomacy">Close</button>
+        </div>
+        
+        <div id="tech-panel" style="display: none; width: 800px; padding: 10px; background-color: #eee; border: 1px solid #999; margin-bottom: 10px;">
+            <h3>Technology Tree</h3>
+            <div id="tech-tree"></div>
+            <button id="close-tech">Close</button>
+        </div>
+        
+        <div id="city-panel">
+            <h3>City Management</h3>
+            <div id="city-info"></div>
+            <div id="city-production"></div>
+            <button id="close-city">Close</button>
+        </div>
+    </div>
+
+    <script src="scripts/civilizationGame.js"></script>
+</body>
+</html>
