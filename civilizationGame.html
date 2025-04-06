@@ -2422,6 +2422,8 @@
             aiTradeWithOtherAIs(aiPlayer);
 
             for (const unit of aiPlayer.units) {
+                const target = unit.type.range ? findRangedTarget(unit, aiPlayer) : findBestTarget(unit, aiPlayer, threats, expansionOpportunities);
+
                 if (unit.moves > 0) {
                     const unitType = UNIT_TYPES[unit.type];
 
@@ -2458,27 +2460,40 @@
 
                         // Ensure the settler does not move again this turn
                         unit.moves = 0;
-                    } else if (unitType.range) {
-                        const target = findRangedTarget(unit, aiPlayer);
-                        if (target && target.player !== undefined) {
-                            const targetPlayer = gameState.players[target.player];
-                            if (aiPlayer.relations[targetPlayer.id]?.attitude < 60) {
-                                performRangedAttack(unit, target.x, target.y);
-                                continue;
-                            }
-                        }
-                    } else {
-                        const target = findBestTarget(unit, aiPlayer, threats, expansionOpportunities);
-                        if (target) {
-                            const targetPlayer = gameState.players[target.player];
-                            if (aiPlayer.relations[targetPlayer.id]?.attitude < 60) {
+                    } else if (target && target.player !== undefined) {
+                        const targetPlayer = gameState.players[target.player];
+                        if (aiPlayer.relations[targetPlayer.id]?.attitude < 60) {
+                            if (unitType.range) {
+                                // Perform ranged attack if in range
+                                const dx = Math.abs(unit.x - target.x);
+                                const dy = Math.abs(unit.y - target.y);
+                                if (dx + dy <= unitType.range && (dx === 0 || dy === 0)) {
+                                    performRangedAttack(unit, target.x, target.y);
+                                } else {
+                                    // Move closer to the target if out of range
+                                    const path = findPath(unit.x, unit.y, target.x, target.y, unit);
+                                    if (path.length > 0) {
+                                        const nextStep = path[0];
+                                        moveUnit(unit, nextStep.x, nextStep.y);
+                                    }
+                                }
+                            } else {
+                                // Melee units need to move into range before attacking
                                 const path = findPath(unit.x, unit.y, target.x, target.y, unit);
                                 if (path.length > 0) {
                                     const nextStep = path[0];
-                                    moveUnit(unit, nextStep.x, nextStep.y);
-                                    continue;
+                                    const distance = Math.abs(nextStep.x - target.x) + Math.abs(nextStep.y - target.y);
+                                    if (distance === 1) {
+                                        // If adjacent to the target, attack
+                                        moveUnit(unit, nextStep.x, nextStep.y);
+                                        performRangedAttack(unit, target.x, target.y); // Melee attack uses the same function
+                                    } else {
+                                        // Otherwise, move closer
+                                        moveUnit(unit, nextStep.x, nextStep.y);
+                                    }
                                 }
                             }
+                            continue;
                         }
                     }
 
