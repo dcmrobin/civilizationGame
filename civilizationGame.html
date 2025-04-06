@@ -350,7 +350,7 @@
             GALLEY: { name: 'Galley', cost: 30, goldCost: 120, strength: 10, move: 3, production: ['PORT'], naval: true, foodConsumption: 3 }
         };
 
-        // Building types - now using a more generic system
+        // Building types
         const BUILDING_TYPES = {
             GRANARY: { 
                 name: 'Granary', 
@@ -365,8 +365,21 @@
                 icon: 'GR',
                 color: '#8B4513',
                 health: 50
+            },
+            LIBRARY: { 
+                name: 'Library', 
+                goldCost: 100, 
+                productionCost: 60, 
+                requires: 'WRITING',
+                description: 'Increases research output by 50% in nearby cities',
+                effects: {
+                    researchMultiplier: 1.1
+                },
+                constructionTurns: 5,
+                icon: 'LB',
+                color: '#0047ab',
+                health: 50
             }
-            // Future buildings can be added here with the same structure
         };
 
         const TECH_TREE = {
@@ -1600,6 +1613,41 @@
             return gold;
         }
 
+        function calculateCityResearch(x, y, playerId) {
+            let research = 2; // Base research value for the city
+            const directions = [
+                { dx: 0, dy: -1 }, { dx: 1, dy: 0 },
+                { dx: 0, dy: 1 }, { dx: -1, dy: 0 },
+                { dx: -1, dy: -1 }, { dx: 1, dy: -1 },
+                { dx: -1, dy: 1 }, { dx: 1, dy: 1 }
+            ];
+
+            for (const dir of directions) {
+                const nx = x + dir.dx;
+                const ny = y + dir.dy;
+
+                if (ny >= 0 && ny < gameState.map.length && nx >= 0 && nx < gameState.map[0].length) {
+                    const tile = gameState.map[ny][nx];
+                    research += tile.research || 0;
+                }
+            }
+
+            // Add research boost from nearby libraries
+            for (const building of gameState.buildings) {
+                if (building.player === playerId) {
+                    const buildingDef = BUILDING_TYPES[building.type];
+                    if (buildingDef && buildingDef.effects && buildingDef.effects.researchMultiplier) {
+                        const distance = Math.abs(building.x - x) + Math.abs(building.y - y);
+                        if (distance <= 2) { // Libraries affect cities within 2 tiles
+                            research *= buildingDef.effects.researchMultiplier;
+                        }
+                    }
+                }
+            }
+
+            return Math.floor(research); // Return the total research value
+        }
+
         function generateCityName(player) {
             const prefixes = {
                 0: ['New', 'Fort', 'Port', 'San', 'Los'],
@@ -1672,6 +1720,14 @@
                 if (ny >= 0 && ny < gameState.map.length && nx >= 0 && nx < gameState.map[0].length) {
                     const city = findCityAt(nx, ny);
                     if (city && city.player === player.id) {
+                        // Check if the city already has a library
+                        const hasLibrary = gameState.buildings.some(b => 
+                            b.type === 'LIBRARY' && b.player === player.id && 
+                            Math.abs(b.x - city.x) + Math.abs(b.y - city.y) <= 1
+                        );
+                        if (buildingType === 'LIBRARY' && hasLibrary) {
+                            return false; // Prevent building another library for this city
+                        }
                         return true;
                     }
                 }
@@ -1721,7 +1777,7 @@
             
             // Add the completed building
             const building = {
-                type: buildingType,  // Without _CONSTRUCTION suffix
+                type: buildingType,
                 x: construction.x,
                 y: construction.y,
                 player: construction.player,
@@ -1992,12 +2048,15 @@
             }
 
             if (player.currentResearch) {
-                player.research += 2;
+                for (const city of player.cities) {
+                    player.research += calculateCityResearch(city.x, city.y, player.id);
+                }
                 const tech = TECH_TREE[player.currentResearch];
                 if (player.research >= tech.cost) {
                     player.researchedTechs.add(player.currentResearch);
-                    player.research = 0;
+                    logMessage(`${player.name} completed research on ${tech.name}.`, player.id);
                     player.currentResearch = null;
+                    player.research = 0;
                 }
             }
 
@@ -2225,33 +2284,30 @@
                     
                     // Check each city for building opportunities
                     for (const city of aiPlayer.cities) {
-                        // Only build if we have few buildings relative to cities
-                        const buildingCount = aiPlayer.buildings.filter(b => b.type === buildingType).length;
-                        if (buildingCount < aiPlayer.cities.length * 0.75) { // Build buildings for 75% of cities
-                            const hasAdjacentBuilding = gameState.buildings.some(b => 
-                                b.player === aiPlayer.id && 
-                                b.type === buildingType &&
-                                Math.abs(b.x - city.x) + Math.abs(b.y - city.y) === 1
-                            );
+                        const hasAdjacentBuilding = gameState.buildings.some(b => 
+                            b.player === aiPlayer.id && 
+                            b.type === buildingType &&
+                            Math.abs(b.x - city.x) + Math.abs(b.y - city.y) === 1
+                        );
+                        
+                        if (!hasAdjacentBuilding) {
+                            // Find valid adjacent tile
+                            const directions = [
+                                { dx: 0, dy: -1 }, { dx: 1, dy: 0 },
+                                { dx: 0, dy: 1 }, { dx: -1, dy: 0 }
+                            ].sort(() => Math.random() - 0.5); // Randomize direction order
                             
-                            if (!hasAdjacentBuilding) {
-                                // Find valid adjacent tile
-                                const directions = [
-                                    { dx: 0, dy: -1 }, { dx: 1, dy: 0 },
-                                    { dx: 0, dy: 1 }, { dx: -1, dy: 0 }
-                                ].sort(() => Math.random() - 0.5); // Randomize direction order
+                            for (const dir of directions) {
+                                const nx = city.x + dir.dx;
+                                const ny = city.y + dir.dy;
                                 
-                                for (const dir of directions) {
-                                    const nx = city.x + dir.dx;
-                                    const ny = city.y + dir.dy;
+                                if (ny >= 0 && ny < gameState.map.length &&
+                                    nx >= 0 && nx < gameState.map[0].length &&
+                                    canBuildBuilding(aiPlayer, buildingType, nx, ny)) {
                                     
-                                    if (ny >= 0 && ny < gameState.map.length &&
-                                        nx >= 0 && nx < gameState.map[0].length &&
-                                        canBuildBuilding(aiPlayer, buildingType, nx, ny)) {
-                                        
-                                        if (buildBuilding(aiPlayer, buildingType, nx, ny)) {
-                                            break; // Only build one building per city per turn
-                                        }
+                                    if (buildBuilding(aiPlayer, buildingType, nx, ny)) {
+                                        logMessage(`${aiPlayer.name} started building a ${buildingDef.name} near ${city.name}.`, aiPlayer.id);
+                                        break;
                                     }
                                 }
                             }
@@ -2888,48 +2944,38 @@
             // Unit production
             const unitProductionElement = document.getElementById('unit-production');
             for (const [unitType, unitDef] of Object.entries(UNIT_TYPES)) {
-                if (!unitDef.production.includes('CITY')) continue;
-
-                if (!unitDef.requires || player.researchedTechs.has(unitDef.requires)) {
-                    const unitElement = document.createElement('div');
-                    unitElement.className = 'tech-item';
-                    if (city.currentProduction === unitType) unitElement.classList.add('researched');
-                    
-                    const button = document.createElement('button');
-                    button.textContent = 'Build';
-                    button.onclick = () => startUnitProduction(unitType, city.x, city.y);
-                    
-                    // Disable button if already producing something
-                    button.disabled = !!city.currentProduction;
-                    
-                    unitElement.innerHTML = `
-                        ${unitDef.name} (${unitDef.cost} production, ${unitDef.goldCost} gold)
-                    `;
-                    unitElement.appendChild(button);
-                    unitProductionElement.appendChild(unitElement);
-                }
+                const button = document.createElement('button');
+                button.textContent = `${unitDef.name} (${unitDef.goldCost} gold)`;
+                button.onclick = () => startUnitProduction(unitType, city.x, city.y);
+                unitProductionElement.appendChild(button);
             }
 
             // Building production
             const buildingProductionElement = document.getElementById('building-production');
             for (const [buildingType, buildingDef] of Object.entries(BUILDING_TYPES)) {
-                if (!buildingDef.requires || player.researchedTechs.has(buildingDef.requires)) {
-                    const buildingElement = document.createElement('div');
-                    buildingElement.className = 'tech-item';
-                    
-                    const button = document.createElement('button');
-                    button.textContent = 'Build';
-                    button.onclick = () => startBuildingConstruction(city.x, city.y, buildingType);
-                    
-                    // Disable button if already producing something
-                    button.disabled = !!city.currentProduction;
-                    
-                    buildingElement.innerHTML = `
-                        ${buildingDef.name} (${buildingDef.goldCost} gold)
-                    `;
-                    buildingElement.appendChild(button);
-                    buildingProductionElement.appendChild(buildingElement);
+                // Skip the building if the required technology hasn't been researched
+                if (buildingDef.requires && !player.researchedTechs.has(buildingDef.requires)) {
+                    continue;
                 }
+
+                const button = document.createElement('button');
+                button.textContent = `${buildingDef.name} (${buildingDef.goldCost} gold)`;
+
+                // Check if the building is a library and if one already exists near the city
+                if (buildingType === 'LIBRARY') {
+                    const hasLibrary = gameState.buildings.some(b =>
+                        b.type === 'LIBRARY' &&
+                        b.player === player.id &&
+                        Math.abs(b.x - city.x) + Math.abs(b.y - city.y) <= 1
+                    );
+                    if (hasLibrary) {
+                        button.disabled = true; // Disable the button if a library exists
+                        button.title = "A library already exists near this city.";
+                    }
+                }
+
+                button.onclick = () => startBuildingConstruction(city.x, city.y, buildingType);
+                buildingProductionElement.appendChild(button);
             }
 
             document.getElementById('city-panel').style.display = 'block';
