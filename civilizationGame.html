@@ -2527,20 +2527,40 @@
         }
 
         function explore(unit, aiPlayer) {
-            const radius = 7;
-            let targetTile = null;
-            let bestScore = -Infinity;
+            const radius = 3; // Limit exploration to a 3-tile radius
 
-            // Look for the most valuable unexplored tile within radius
+            // If the unit already has a target, continue moving toward it
+            if (unit.targetX !== undefined && unit.targetY !== undefined) {
+                const path = findPath(unit.x, unit.y, unit.targetX, unit.targetY, unit);
+
+                if (path.length > 0) {
+                    const nextStep = path[0];
+                    if (canMoveTo(unit, nextStep.x, nextStep.y)) {
+                        moveUnit(unit, nextStep.x, nextStep.y);
+                        return; // Continue moving toward the current target
+                    } else {
+                        // If the path is blocked, clear the target and choose a new one
+                        unit.targetX = undefined;
+                        unit.targetY = undefined;
+                    }
+                } else {
+                    // If the path is invalid, clear the target and choose a new one
+                    unit.targetX = undefined;
+                    unit.targetY = undefined;
+                }
+            }
+
+            // If no target is set, choose a new random tile within the radius
+            const validTiles = [];
             for (let dy = -radius; dy <= radius; dy++) {
                 for (let dx = -radius; dx <= radius; dx++) {
                     const nx = unit.x + dx;
                     const ny = unit.y + dy;
 
-                    if (ny >= 0 && ny < gameState.map.length && 
+                    if (ny >= 0 && ny < gameState.map.length &&
                         nx >= 0 && nx < gameState.map[0].length) {
                         
-                        // Skip if tile is occupied or invalid
+                        // Skip tiles that are occupied or invalid
                         if (!canMoveTo(unit, nx, ny, true) || 
                             findCityAt(nx, ny) || 
                             findUnitAt(nx, ny) || 
@@ -2548,41 +2568,24 @@
                             continue;
                         }
 
-                        // Score based on distance and tile value
-                        const distance = Math.abs(dx) + Math.abs(dy);
-                        const tile = gameState.map[ny][nx];
-                        const tileValue = (tile.food || 0) + (tile.production || 0) + (tile.gold || 0);
-                        const score = tileValue - distance * 2;
-
-                        if (score > bestScore) {
-                            bestScore = score;
-                            targetTile = { x: nx, y: ny };
-                        }
+                        validTiles.push({ x: nx, y: ny });
                     }
                 }
             }
 
-            if (targetTile) {
-                const path = findPath(unit.x, unit.y, targetTile.x, targetTile.y, unit);
+            // If there are valid tiles, pick one at random and set it as the target
+            if (validTiles.length > 0) {
+                const targetTile = validTiles[Math.floor(Math.random() * validTiles.length)];
+                unit.targetX = targetTile.x;
+                unit.targetY = targetTile.y;
+
+                // Start moving toward the new target
+                const path = findPath(unit.x, unit.y, unit.targetX, unit.targetY, unit);
                 if (path.length > 0) {
                     const nextStep = path[0];
-                    moveUnit(unit, nextStep.x, nextStep.y);
-                    return;
-                }
-            }
-
-            // Fallback random movement if no target found
-            const directions = [
-                { dx: 0, dy: -1 }, { dx: 1, dy: 0 },
-                { dx: 0, dy: 1 }, { dx: -1, dy: 0 }
-            ].sort(() => Math.random() - 0.5);
-
-            for (const dir of directions) {
-                const nx = unit.x + dir.dx;
-                const ny = unit.y + dir.dy;
-                if (canMoveTo(unit, nx, ny, true)) {
-                    moveUnit(unit, nx, ny);
-                    break;
+                    if (canMoveTo(unit, nextStep.x, nextStep.y)) {
+                        moveUnit(unit, nextStep.x, nextStep.y);
+                    }
                 }
             }
         }
@@ -2983,6 +2986,11 @@
             // Unit production
             const unitProductionElement = document.getElementById('unit-production');
             for (const [unitType, unitDef] of Object.entries(UNIT_TYPES)) {
+                // Skip units that require a technology the player hasn't researched
+                if (unitDef.requires && !player.researchedTechs.has(unitDef.requires)) {
+                    continue;
+                }
+
                 const button = document.createElement('button');
                 button.textContent = `${unitDef.name} (${unitDef.goldCost} gold)`;
                 button.title = unitDef.description || "No description available"; // Add description as tooltip
