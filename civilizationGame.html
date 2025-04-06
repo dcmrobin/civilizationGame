@@ -1743,7 +1743,7 @@
 
             if (relation.tradedThisTurn) return;
 
-            const tradeDistance = 5;
+            const tradeDistance = 7;
             const canTrade = aiPlayer.cities.some(aiCity =>
                 humanPlayer.cities.some(humanCity =>
                     Math.abs(aiCity.x - humanCity.x) + Math.abs(aiCity.y - humanCity.y) <= tradeDistance
@@ -2401,7 +2401,7 @@
                 if (otherAI.id !== aiPlayer.id && !otherAI.isHuman) {
                     const relation = aiPlayer.relations[otherAI.id];
 
-                    const tradeDistance = 5;
+                    const tradeDistance = 7;
                     const canTrade = aiPlayer.cities.some(aiCity =>
                         otherAI.cities.some(otherCity =>
                             Math.abs(aiCity.x - otherCity.x) + Math.abs(aiCity.y - otherCity.y) <= tradeDistance
@@ -2728,7 +2728,7 @@
             const aiPlayer = gameState.players[aiPlayerId];
             const relation = humanPlayer.relations[aiPlayerId];
 
-            const tradeDistance = 5;
+            const tradeDistance = 7;
             const canTrade = humanPlayer.cities.some(humanCity =>
                 aiPlayer.cities.some(aiCity =>
                     Math.abs(humanCity.x - aiCity.x) + Math.abs(humanCity.y - aiCity.y) <= tradeDistance
