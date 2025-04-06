@@ -1741,6 +1741,11 @@
             const humanPlayer = gameState.players[0];
             const relation = aiPlayer.relations[humanPlayer.id];
 
+            // Ensure the AI has researched "Writing"
+            if (!aiPlayer.researchedTechs.has('WRITING')) {
+                return;
+            }
+
             if (relation.tradedThisTurn) return;
 
             const tradeDistance = 7;
@@ -1771,15 +1776,15 @@
                 aiPlayer.relations[humanPlayer.id].attitude = Math.min(100, relation.attitude + reputationBoost);
                 humanPlayer.relations[aiPlayer.id].attitude = Math.min(100, humanPlayer.relations[aiPlayer.id].attitude + reputationBoost);
 
-                logMessage(`${humanPlayer.name} accepted a trade with ${aiPlayer.name}. Relations improved!`, aiPlayer.id, humanPlayer.id);
-            } else {
-                logMessage(`${humanPlayer.name} declined a trade offer from ${aiPlayer.name}.`, aiPlayer.id, humanPlayer.id);
-                humanPlayer.relations[aiPlayer.id].attitude = Math.min(100, relation.attitude - 2);
-                aiPlayer.relations[humanPlayer.id].attitude = Math.min(100, aiPlayer.relations[humanPlayer.id].attitude - 2);
-            }
+        logMessage(`${humanPlayer.name} accepted a trade with ${aiPlayer.name}. Relations improved!`, aiPlayer.id, humanPlayer.id);
+    } else {
+        logMessage(`${humanPlayer.name} declined a trade offer from ${aiPlayer.name}.`, aiPlayer.id, humanPlayer.id);
+        humanPlayer.relations[aiPlayer.id].attitude = Math.min(100, relation.attitude - 2);
+        aiPlayer.relations[humanPlayer.id].attitude = Math.min(100, aiPlayer.relations[humanPlayer.id].attitude - 2);
+    }
 
-            relation.tradedThisTurn = true;
-        }
+    relation.tradedThisTurn = true;
+}
 
         function resetTradeFlags() {
             for (const player of gameState.players) {
@@ -2401,6 +2406,11 @@
                 if (otherAI.id !== aiPlayer.id && !otherAI.isHuman) {
                     const relation = aiPlayer.relations[otherAI.id];
 
+                    // Ensure both AI players have researched "Writing"
+                    if (!aiPlayer.researchedTechs.has('WRITING') || !otherAI.researchedTechs.has('WRITING')) {
+                        continue;
+                    }
+
                     const tradeDistance = 7;
                     const canTrade = aiPlayer.cities.some(aiCity =>
                         otherAI.cities.some(otherCity =>
@@ -2695,9 +2705,20 @@
                                 <div class="relation-fill" style="width: ${relation.attitude}%"></div>
                                 <div class="relation-text">${getRelationText(relation.attitude)} (${relation.attitude})</div>
                             </div>
-                            <button onclick="proposeTrade(${player.id})">Propose Trade</button>
-                            <button onclick="declareWar(${player.id})" style="background-color: red; color: white;">Declare War</button>
                         `;
+
+                        // Check if "Writing" has been researched
+                        if (currentPlayer.researchedTechs.has('WRITING')) {
+                            relationElement.innerHTML += `
+                                <button onclick="proposeTrade(${player.id})">Propose Trade</button>
+                                <button onclick="declareWar(${player.id})" style="background-color: red; color: white;">Declare War</button>
+                            `;
+                        } else {
+                            relationElement.innerHTML += `
+                                <p style="color: gray;">Research "Writing" to unlock diplomacy options.</p>
+                            `;
+                        }
+
                         relationsContainer.appendChild(relationElement);
                     } else {
                         const relationElement = document.createElement('div');
