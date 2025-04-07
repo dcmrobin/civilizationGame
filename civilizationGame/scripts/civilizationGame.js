@@ -2099,19 +2099,20 @@ function aiTurn(aiPlayer) {
             if (unit.type === 'SETTLER') {
                 // Check the current tile's score
                 const currentTileScore = evaluateTileScore(unit.x, unit.y, aiPlayer);
-
+            
                 // Check if the current tile is better than nearby opportunities
-                if (currentTileScore >= 18) {
+                if (currentTileScore >= 18 && !findCityAt(unit.x, unit.y)) {
                     foundCity(unit, unit.x, unit.y);
                     return;
                 }
-
+            
                 // Find the best nearby opportunity
                 const validTile = expansionOpportunities.find(opportunity =>
                     Math.abs(unit.x - opportunity.x) + Math.abs(unit.y - opportunity.y) <= 1 &&
-                    opportunity.score >= 18
+                    opportunity.score >= 18 &&
+                    !findCityAt(opportunity.x, opportunity.y) // Ensure no city exists on the tile
                 );
-
+            
                 if (validTile) {
                     // Check if the settler is already adjacent to the valid tile
                     const distance = Math.abs(unit.x - validTile.x) + Math.abs(unit.y - validTile.y);
@@ -2131,7 +2132,9 @@ function aiTurn(aiPlayer) {
                     continue;
                 } else {
                     // No valid tile nearby, continue exploring
-                    const nextOpportunity = expansionOpportunities[0];
+                    const nextOpportunity = expansionOpportunities.find(opportunity =>
+                        !findCityAt(opportunity.x, opportunity.y) // Ensure no city exists on the tile
+                    );
                     if (nextOpportunity) {
                         const path = findPath(unit.x, unit.y, nextOpportunity.x, nextOpportunity.y, unit);
                         if (path.length > 0) {
@@ -2145,7 +2148,7 @@ function aiTurn(aiPlayer) {
                         explore(unit, aiPlayer);
                     }
                 }
-
+            
                 // Ensure the settler does not move again this turn
                 unit.moves = 0;
             } else if (target && target.player !== undefined) {
