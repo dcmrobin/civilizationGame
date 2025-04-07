@@ -2107,8 +2107,21 @@ function aiTurn(aiPlayer) {
                 );
 
                 if (validTile) {
-                    // Move to the valid tile and found a city
-                    foundCity(unit, validTile.x, validTile.y);
+                    // Check if the settler is already adjacent to the valid tile
+                    const distance = Math.abs(unit.x - validTile.x) + Math.abs(unit.y - validTile.y);
+                    if (distance === 1) {
+                        // If adjacent, found the city
+                        foundCity(unit, validTile.x, validTile.y);
+                    } else {
+                        // Otherwise, move step-by-step toward the valid tile
+                        const path = findPath(unit.x, unit.y, validTile.x, validTile.y, unit);
+                        if (path.length > 0) {
+                            const nextStep = path[0];
+                            if (canMoveTo(unit, nextStep.x, nextStep.y)) {
+                                moveUnit(unit, nextStep.x, nextStep.y);
+                            }
+                        }
+                    }
                     continue;
                 } else {
                     // No valid tile nearby, continue exploring
