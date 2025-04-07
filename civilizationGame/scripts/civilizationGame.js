@@ -2100,6 +2100,12 @@ function aiTurn(aiPlayer) {
                 // Check the current tile's score
                 const currentTileScore = evaluateTileScore(unit.x, unit.y, aiPlayer);
 
+                // Check if the current tile is better than nearby opportunities
+                if (currentTileScore >= 18) {
+                    foundCity(unit, unit.x, unit.y);
+                    return;
+                }
+
                 // Find the best nearby opportunity
                 const validTile = expansionOpportunities.find(opportunity =>
                     Math.abs(unit.x - opportunity.x) + Math.abs(unit.y - opportunity.y) <= 1 &&
