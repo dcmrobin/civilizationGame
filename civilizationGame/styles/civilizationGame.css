@@ -200,40 +200,87 @@ button {
     width: 120px;
     cursor: pointer;
     z-index: 2;
-    background-color: #f8f9fa; /* Default color for unavailable tech */
+    background-color: #f8f9fa; /* Default/unavailable color */
     border: 2px solid #6c757d;
-    color: #343a40;
     transition: all 0.2s ease;
 }
 
 .tech-node.researched {
-    background-color: #d4edda;
-    border-color: #28a745;
+    background-color: #d4edda; /* Light green background */
+    border-color: #28a745; /* Dark green border */
     box-shadow: 0 0 10px rgba(40, 167, 69, 0.3);
 }
 
 .tech-node.available {
-    background-color: #fff3cd;
-    border-color: #ffc107;
+    cursor: pointer;
+}
+
+/* Add a pulsing animation for available tech */
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.03); }
+    100% { transform: scale(1); }
+}
+
+.tech-node.available {
+    animation: pulse 2s infinite;
+}
+
+.tech-node.available:hover {
+    animation: none; /* Stop pulse on hover */
+}
+
+.tech-node.available {
+    background-color: #fff3cd; /* Light yellow background */
+    border-color: #ffc107; /* Gold/yellow border */
     box-shadow: 0 0 10px rgba(255, 193, 7, 0.3);
 }
 
 .tech-node.unavailable {
-    background-color: #f8f9fa;
-    border-color: #6c757d;
+    background-color: #f8f9fa; /* Light gray background */
+    border-color: #6c757d; /* Gray border */
     color: #6c757d;
     cursor: not-allowed;
 }
 
-.tech-node .tech-connector-down {
-    position: absolute;
-    height: 30px;
-    width: 2px;
-    background-color: #6c757d;
-    left: 50%;
-    bottom: -30px;
-    transform: translateX(-50%);
-    z-index: 1;
+/* Add some hover effects */
+.tech-node.available:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 5px 15px rgba(255, 193, 7, 0.4);
+}
+
+.tech-node.researched:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 5px 15px rgba(40, 167, 69, 0.4);
+}
+
+/* Update the text colors for better contrast */
+.tech-node .tech-name {
+    font-weight: bold;
+    margin-bottom: 5px;
+    color: #212529; /* Dark text for all states */
+}
+
+.tech-node .tech-cost {
+    font-size: 0.8em;
+}
+
+.tech-node.researched .tech-cost {
+    color: #28a745; /* Green for researched */
+}
+
+.tech-node.available .tech-cost {
+    color: #ffc107; /* Yellow for available */
+}
+
+.tech-node.unavailable .tech-cost {
+    color: #6c757d; /* Gray for unavailable */
+}
+
+.tech-node .tech-desc {
+    font-size: 0.7em;
+    margin-top: 5px;
+    color: #495057; /* Slightly darker gray for description */
 }
 
 .tech-connector-path {
