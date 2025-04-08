@@ -634,6 +634,7 @@ function showTileInfo(tile, event) {
     const tileInfo = document.getElementById('tile-info');
     let infoHTML = `
         <strong>${tile.name}</strong><br>
+        Coordinates: (${tile.x}, ${tile.y})<br> <!-- Added coordinates -->
         Move Cost: ${tile.moveCost}<br>
         Food: ${tile.food}<br>
         Production: ${tile.production}<br>
@@ -2121,13 +2122,14 @@ function aiTurn(aiPlayer) {
 
             if (unit.type === 'SETTLER') {
                 // Check the current tile's score
-                const currentTileScore = evaluateTileScore(unit.x, unit.y, aiPlayer);
+                /*const currentTileScore = evaluateTileScore(unit.x, unit.y, aiPlayer);
             
                 // Check if the current tile is better than nearby opportunities
                 if (currentTileScore >= 18 && !findCityAt(unit.x, unit.y)) {
+                    logMessage(`${aiPlayer.name}'s Settler is founding a city at (${unit.x}, ${unit.y}).`, aiPlayer.id);
                     foundCity(unit, unit.x, unit.y);
                     return;
-                }
+                }*/
             
                 // Find the best nearby opportunity
                 const validTile = expansionOpportunities.find(opportunity =>
@@ -2137,13 +2139,12 @@ function aiTurn(aiPlayer) {
                 );
             
                 if (validTile) {
-                    // Check if the settler is already adjacent to the valid tile
                     const distance = Math.abs(unit.x - validTile.x) + Math.abs(unit.y - validTile.y);
                     if (distance === 1) {
-                        // If adjacent, found the city
+                        logMessage(`${aiPlayer.name}'s Settler is founding a city at (${validTile.x}, ${validTile.y}).`, aiPlayer.id);
                         foundCity(unit, validTile.x, validTile.y);
                     } else {
-                        // Otherwise, move step-by-step toward the valid tile
+                        logMessage(`${aiPlayer.name}'s Settler is moving toward a valid tile at (${validTile.x}, ${validTile.y}).`, aiPlayer.id);
                         const path = findPath(unit.x, unit.y, validTile.x, validTile.y, unit);
                         if (path.length > 0) {
                             const nextStep = path[0];
@@ -2159,6 +2160,7 @@ function aiTurn(aiPlayer) {
                         !findCityAt(opportunity.x, opportunity.y) // Ensure no city exists on the tile
                     );
                     if (nextOpportunity) {
+                        logMessage(`${aiPlayer.name}'s Settler is exploring toward a potential tile at (${nextOpportunity.x}, ${nextOpportunity.y}).`, aiPlayer.id);
                         const path = findPath(unit.x, unit.y, nextOpportunity.x, nextOpportunity.y, unit);
                         if (path.length > 0) {
                             const nextStep = path[0];
@@ -2167,7 +2169,7 @@ function aiTurn(aiPlayer) {
                             }
                         }
                     } else {
-                        // No opportunities left, explore the map
+                        logMessage(`${aiPlayer.name}'s Settler is exploring the map as no valid opportunities are nearby.`, aiPlayer.id);
                         explore(unit, aiPlayer);
                     }
                 }
