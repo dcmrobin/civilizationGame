@@ -268,17 +268,6 @@ button {
     cursor: not-allowed;
 }
 
-/* Add some hover effects */
-.tech-node.available:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 5px 15px rgba(255, 193, 7, 0.4);
-}
-
-.tech-node.researched:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 5px 15px rgba(40, 167, 69, 0.4);
-}
-
 /* Update the text colors for better contrast */
 .tech-node .tech-name {
     font-weight: bold;
