@@ -178,18 +178,76 @@ button {
     line-height: 20px;
     color: black;
 }
-.tech-item {
-    padding: 5px;
-    margin: 2px 0;
-    background-color: #f8f8f8;
-    border: 1px solid #ccc;
+
+.tech-tree-container {
+    position: relative;
+    min-height: 500px;
+}
+
+.tech-level {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 60px;
+    position: relative;
+}
+
+.tech-node {
+    position: relative;
+    padding: 10px;
+    margin: 0 20px;
+    border-radius: 5px;
+    text-align: center;
+    width: 120px;
     cursor: pointer;
+    z-index: 2;
+    background-color: #f8f9fa; /* Default color for unavailable tech */
+    border: 2px solid #6c757d;
+    color: #343a40;
+    transition: all 0.2s ease;
 }
-.tech-item.researched {
+
+.tech-node.researched {
     background-color: #d4edda;
+    border-color: #28a745;
+    box-shadow: 0 0 10px rgba(40, 167, 69, 0.3);
 }
-.tech-item.available {
+
+.tech-node.available {
     background-color: #fff3cd;
+    border-color: #ffc107;
+    box-shadow: 0 0 10px rgba(255, 193, 7, 0.3);
+}
+
+.tech-node.unavailable {
+    background-color: #f8f9fa;
+    border-color: #6c757d;
+    color: #6c757d;
+    cursor: not-allowed;
+}
+
+.tech-node .tech-connector-down {
+    position: absolute;
+    height: 30px;
+    width: 2px;
+    background-color: #6c757d;
+    left: 50%;
+    bottom: -30px;
+    transform: translateX(-50%);
+    z-index: 1;
+}
+
+.tech-connector-path {
+    position: absolute;
+    background-color: #6c757d;
+    z-index: 1;
+}
+
+.tech-connector-horizontal {
+    height: 2px;
+}
+
+.tech-connector-vertical {
+    width: 2px;
 }
 #help-panel {
     width: 800px;

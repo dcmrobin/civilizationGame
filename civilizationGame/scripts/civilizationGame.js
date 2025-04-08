@@ -52,15 +52,89 @@ const BUILDING_TYPES = {
 };
 
 const TECH_TREE = {
-    POTTERY: { name: 'Pottery', cost: 50, leadsTo: ['WRITING'], description: 'Allows Granary building' },
-    WRITING: { name: 'Writing', cost: 80, leadsTo: ['PHILOSOPHY'], description: 'Allows Libraries and diplomatic agreements' },
-    PHILOSOPHY: { name: 'Philosophy', cost: 120, leadsTo: ['EDUCATION'], description: 'Increases research output' },
-    ARCHERY: { name: 'Archery', cost: 60, leadsTo: ['MATHEMATICS'], description: 'Allows Archer units' },
-    MATHEMATICS: { name: 'Mathematics', cost: 100, leadsTo: ['PHYSICS'], description: 'Improves city defenses' },
-    BRONZE_WORKING: { name: 'Bronze Working', cost: 80, leadsTo: ['IRON_WORKING'], description: 'Allows Spearman units' },
-    IRON_WORKING: { name: 'Iron Working', cost: 120, leadsTo: ['STEEL'], description: 'Allows Swordsman units' },
-    EDUCATION: { name: 'Education', cost: 150, leadsTo: ['SCIENTIFIC_THEORY'], description: 'Greatly increases research' },
-    SCIENTIFIC_THEORY: { name: 'Scientific Theory', cost: 200, leadsTo: ['BIOLOGY'], description: 'Allows Universities' }
+    // Tier 0 (Root technologies)
+    POTTERY: { 
+        name: 'Pottery', 
+        cost: 50, 
+        leadsTo: ['WRITING', 'BRONZE_WORKING'], 
+        description: 'Allows Granary building' 
+    },
+    
+    // Tier 1
+    WRITING: { 
+        name: 'Writing', 
+        cost: 80, 
+        leadsTo: ['PHILOSOPHY', 'MATHEMATICS'], 
+        description: 'Allows Libraries and diplomatic agreements' 
+    },
+    BRONZE_WORKING: { 
+        name: 'Bronze Working', 
+        cost: 80, 
+        leadsTo: ['IRON_WORKING', 'ARCHERY'], 
+        description: 'Allows Spearman units' 
+    },
+    
+    // Tier 2
+    PHILOSOPHY: { 
+        name: 'Philosophy', 
+        cost: 120, 
+        leadsTo: ['EDUCATION'], 
+        description: 'Increases research output' 
+    },
+    MATHEMATICS: { 
+        name: 'Mathematics', 
+        cost: 100, 
+        leadsTo: ['PHYSICS'], 
+        description: 'Improves city defenses' 
+    },
+    IRON_WORKING: { 
+        name: 'Iron Working', 
+        cost: 120, 
+        leadsTo: ['STEEL'], 
+        description: 'Allows Swordsman units' 
+    },
+    ARCHERY: { 
+        name: 'Archery', 
+        cost: 60, 
+        leadsTo: [], 
+        description: 'Allows Archer units' 
+    },
+    
+    // Tier 3
+    EDUCATION: { 
+        name: 'Education', 
+        cost: 150, 
+        leadsTo: ['SCIENTIFIC_THEORY'], 
+        description: 'Greatly increases research' 
+    },
+    PHYSICS: { 
+        name: 'Physics', 
+        cost: 150, 
+        leadsTo: [], 
+        description: 'Allows advanced military units' 
+    },
+    STEEL: { 
+        name: 'Steel', 
+        cost: 150, 
+        leadsTo: [], 
+        description: 'Allows advanced weapons' 
+    },
+    
+    // Tier 4
+    SCIENTIFIC_THEORY: { 
+        name: 'Scientific Theory', 
+        cost: 200, 
+        leadsTo: ['BIOLOGY'], 
+        description: 'Allows Universities' 
+    },
+    
+    // Tier 5
+    BIOLOGY: { 
+        name: 'Biology', 
+        cost: 250, 
+        leadsTo: [], 
+        description: 'Increases population growth' 
+    }
 };
 
 // Game state
@@ -2675,26 +2749,158 @@ function hideDiplomacy() {
 function showTechTree() {
     const currentPlayer = gameState.players[gameState.currentPlayer];
     const techTreeElement = document.getElementById('tech-tree');
-    techTreeElement.innerHTML = '';
+    techTreeElement.innerHTML = '<div class="tech-tree-container"></div>';
+    const container = techTreeElement.querySelector('.tech-tree-container');
     
-    for (const [techId, tech] of Object.entries(TECH_TREE)) {
-        const techElement = document.createElement('div');
-        techElement.className = 'tech-item';
+    // Calculate tech levels (depth in the tree)
+    const techLevels = {};
+    const techDepths = {};
+    const techPositions = {};
+    
+    // First pass: find all root technologies (no prerequisites)
+    const rootTechs = [];
+    for (const techId in TECH_TREE) {
+        let isRoot = true;
+        for (const otherTechId in TECH_TREE) {
+            if (TECH_TREE[otherTechId].leadsTo && TECH_TREE[otherTechId].leadsTo.includes(techId)) {
+                isRoot = false;
+                break;
+            }
+        }
+        if (isRoot) {
+            rootTechs.push(techId);
+            techDepths[techId] = 0;
+        }
+    }
+    
+    // Second pass: calculate depths for all technologies
+    function calculateDepth(techId) {
+        if (techDepths[techId] !== undefined) return techDepths[techId];
         
-        if (currentPlayer.researchedTechs.has(techId)) {
-            techElement.classList.add('researched');
-        } else if (canResearchTech(currentPlayer, techId)) {
-            techElement.classList.add('available');
-            techElement.addEventListener('click', () => selectTech(techId));
+        let maxDepth = 0;
+        for (const otherTechId in TECH_TREE) {
+            if (TECH_TREE[otherTechId].leadsTo && TECH_TREE[otherTechId].leadsTo.includes(techId)) {
+                const depth = calculateDepth(otherTechId) + 1;
+                if (depth > maxDepth) maxDepth = depth;
+            }
         }
         
-        techElement.innerHTML = `
-            <strong>${tech.name}</strong> (${tech.cost})<br>
-            <small>${tech.description}</small>
-        `;
-        
-        techTreeElement.appendChild(techElement);
+        techDepths[techId] = maxDepth;
+        return maxDepth;
     }
+    
+    for (const techId in TECH_TREE) {
+        calculateDepth(techId);
+    }
+    
+    // Group technologies by depth
+    for (const techId in techDepths) {
+        const depth = techDepths[techId];
+        if (!techLevels[depth]) techLevels[depth] = [];
+        techLevels[depth].push(techId);
+    }
+    
+    // Find maximum depth to properly space the tree
+    const maxDepth = Math.max(...Object.values(techDepths));
+    
+    // Render the tree level by level
+    for (let depth = 0; depth <= maxDepth; depth++) {
+        if (!techLevels[depth]) continue;
+        
+        const levelDiv = document.createElement('div');
+        levelDiv.className = 'tech-level';
+        levelDiv.dataset.depth = depth;
+        
+        // Sort technologies by their position in the original TECH_TREE for consistent ordering
+        techLevels[depth].sort((a, b) => {
+            const aIndex = Object.keys(TECH_TREE).indexOf(a);
+            const bIndex = Object.keys(TECH_TREE).indexOf(b);
+            return aIndex - bIndex;
+        });
+        
+        for (let i = 0; i < techLevels[depth].length; i++) {
+            const techId = techLevels[depth][i];
+            const tech = TECH_TREE[techId];
+            const techElement = document.createElement('div');
+            techElement.className = 'tech-node';
+            techElement.dataset.techId = techId;
+            
+            if (currentPlayer.researchedTechs.has(techId)) {
+                techElement.classList.add('researched');
+            } else if (canResearchTech(currentPlayer, techId)) {
+                techElement.classList.add('available');
+                techElement.addEventListener('click', () => selectTech(techId));
+            } else {
+                techElement.classList.add('unavailable');
+            }
+            
+            techElement.innerHTML = `
+                <div class="tech-name">${tech.name}</div>
+                <div class="tech-cost">${tech.cost} research</div>
+                <div class="tech-desc">${tech.description}</div>
+            `;
+            
+            // Add vertical connector if not the last level
+            if (depth < maxDepth) {
+                techElement.innerHTML += '<div class="tech-connector-down"></div>';
+            }
+            
+            levelDiv.appendChild(techElement);
+        }
+        
+        container.appendChild(levelDiv);
+    }
+    
+    // After all nodes are rendered, calculate positions and draw connectors
+    setTimeout(() => {
+        // First store all node positions
+        const nodes = container.querySelectorAll('.tech-node');
+        nodes.forEach(node => {
+            const rect = node.getBoundingClientRect();
+            const containerRect = container.getBoundingClientRect();
+            techPositions[node.dataset.techId] = {
+                x: rect.left - containerRect.left + rect.width / 2,
+                y: rect.top - containerRect.top + rect.height,
+                width: rect.width,
+                height: rect.height
+            };
+        });
+        
+        // Draw connections between technologies
+        for (const techId in TECH_TREE) {
+            const tech = TECH_TREE[techId];
+            if (tech.leadsTo && tech.leadsTo.length > 0) {
+                const fromPos = techPositions[techId];
+                
+                for (const childTechId of tech.leadsTo) {
+                    const toPos = techPositions[childTechId];
+                    
+                    if (fromPos && toPos) {
+                        // Calculate midpoint between the two technologies
+                        const midX = (fromPos.x + toPos.x) / 2;
+                        
+                        // Create vertical connector from parent down
+                        const verticalConnector = document.createElement('div');
+                        verticalConnector.className = 'tech-connector-path tech-connector-vertical';
+                        verticalConnector.style.left = `${fromPos.x}px`;
+                        verticalConnector.style.top = `${fromPos.y}px`;
+                        verticalConnector.style.height = `${toPos.y - fromPos.y}px`;
+                        container.appendChild(verticalConnector);
+                        
+                        // Create horizontal connector if needed
+                        if (Math.abs(fromPos.x - toPos.x) > 10) {
+                            const horizontalConnector = document.createElement('div');
+                            horizontalConnector.className = 'tech-connector-path tech-connector-horizontal';
+                            horizontalConnector.style.left = `${Math.min(fromPos.x, toPos.x)}px`;
+                            horizontalConnector.style.top = `${toPos.y}px`;
+                            horizontalConnector.style.width = `${Math.abs(fromPos.x - toPos.x)}px`;
+                            container.appendChild(horizontalConnector);
+                        }
+                    }
+                }
+            }
+        }
+    }, 50);
     
     document.getElementById('tech-panel').style.display = 'block';
 }
@@ -2702,13 +2908,14 @@ function showTechTree() {
 function canResearchTech(player, techId) {
     if (player.researchedTechs.has(techId)) return false;
     
-    const tech = TECH_TREE[techId];
+    // Check if any prerequisite technology has been researched
     for (const [otherTechId, otherTech] of Object.entries(TECH_TREE)) {
         if (otherTech.leadsTo && otherTech.leadsTo.includes(techId)) {
             if (player.researchedTechs.has(otherTechId)) return true;
         }
     }
     
+    // If no prerequisites are defined, it's a root technology and can be researched
     const hasPrereq = Object.values(TECH_TREE).some(t => t.leadsTo && t.leadsTo.includes(techId));
     return !hasPrereq;
 }
