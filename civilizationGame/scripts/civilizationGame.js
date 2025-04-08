@@ -377,7 +377,7 @@ function createPlayers() {
             isHuman: true,
             relations: {},
             exploredTiles: new Set(),
-            buildings: [] // Array to store player's buildings
+            buildings: []
         }
     ];
 
@@ -390,7 +390,7 @@ function createPlayers() {
             name: aiNames[i],
             gold: 50,
             research: 0,
-            currentResearch: null,
+            currentResearch: null,  // Start with no research
             researchedTechs: new Set(),
             cities: [],
             units: [],
@@ -398,7 +398,7 @@ function createPlayers() {
             isHuman: false,
             relations: {},
             exploredTiles: new Set(),
-            buildings: [] // Array to store AI's buildings
+            buildings: []
         });
     }
 
@@ -1283,41 +1283,6 @@ function calculateCityGold(x, y) {
     return gold;
 }
 
-function calculateCityResearch(x, y, playerId) {
-    let research = 2; // Base research value for the city
-    const directions = [
-        { dx: 0, dy: -1 }, { dx: 1, dy: 0 },
-        { dx: 0, dy: 1 }, { dx: -1, dy: 0 },
-        { dx: -1, dy: -1 }, { dx: 1, dy: -1 },
-        { dx: -1, dy: 1 }, { dx: 1, dy: 1 }
-    ];
-
-    for (const dir of directions) {
-        const nx = x + dir.dx;
-        const ny = y + dir.dy;
-
-        if (ny >= 0 && ny < gameState.map.length && nx >= 0 && nx < gameState.map[0].length) {
-            const tile = gameState.map[ny][nx];
-            research += tile.research || 0;
-        }
-    }
-
-    // Add research boost from nearby libraries
-    for (const building of gameState.buildings) {
-        if (building.player === playerId) {
-            const buildingDef = BUILDING_TYPES[building.type];
-            if (buildingDef && buildingDef.effects && buildingDef.effects.researchMultiplier) {
-                const distance = Math.abs(building.x - x) + Math.abs(building.y - y);
-                if (distance <= 2) { // Libraries affect cities within 2 tiles
-                    research *= buildingDef.effects.researchMultiplier;
-                }
-            }
-        }
-    }
-
-    return Math.floor(research); // Return the total research value
-}
-
 function generateCityName(player) {
     const prefixes = {
         0: ['New', 'Fort', 'Port', 'San', 'Los'],
@@ -1734,9 +1699,17 @@ function processPlayerTurn(player) {
     }
 
     if (player.currentResearch) {
-        for (const city of player.cities) {
-            player.research += calculateCityResearch(city.x, city.y, player.id);
-        }
+        // Base research increment is 2
+        let researchIncrement = 2;
+        
+        // Add 2 for each library the player has
+        const playerLibraries = gameState.buildings.filter(b => 
+            b.type === 'LIBRARY' && b.player === player.id
+        ).length;
+        researchIncrement += playerLibraries * 2;
+        
+        player.research += researchIncrement;
+        
         const tech = TECH_TREE[player.currentResearch];
         if (player.research >= tech.cost) {
             player.researchedTechs.add(player.currentResearch);
@@ -2101,26 +2074,18 @@ function aiTurn(aiPlayer) {
         }
     }
 
-    if (aiPlayer.currentResearch) {
-        aiPlayer.research += 2;
-        const tech = TECH_TREE[aiPlayer.currentResearch];
-        if (aiPlayer.research >= tech.cost) {
-            aiPlayer.researchedTechs.add(aiPlayer.currentResearch);
-            logMessage(`${aiPlayer.name} completed research on ${tech.name}.`, aiPlayer.id);
-            aiPlayer.currentResearch = null;
-            aiPlayer.research = 0;
-        }
-    }
-
     if (!aiPlayer.currentResearch) {
         const availableTechs = Object.keys(TECH_TREE).filter(techId =>
             canResearchTech(aiPlayer, techId)
         );
 
         if (availableTechs.length > 0) {
-            aiPlayer.currentResearch = prioritizeResearch(aiPlayer, availableTechs);
-            aiPlayer.research = 0;
-            logMessage(`${aiPlayer.name} started researching ${TECH_TREE[aiPlayer.currentResearch].name}.`, aiPlayer.id);
+            // Don't start researching immediately - wait a few turns
+            if (gameState.turn > 0) {// change 0 to some number to wait a few turns
+                aiPlayer.currentResearch = prioritizeResearch(aiPlayer, availableTechs);
+                aiPlayer.research = 0;
+                logMessage(`${aiPlayer.name} started researching ${TECH_TREE[aiPlayer.currentResearch].name}.`, aiPlayer.id);
+            }
         }
     }
 
