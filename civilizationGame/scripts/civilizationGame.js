@@ -12,10 +12,10 @@ const TILE_TYPES = {
 
 const UNIT_TYPES = {
     SETTLER: { name: 'Settler', description: "Able to found cities", cost: 30, goldCost: 50, strength: 0, move: 1, production: ['CITY'], foodConsumption: 2 },
-    SCOUT: { name: 'Scout', cost: 5, description: "Able to move quicker over harder terrain", goldCost: 10, strength: 5, move: 2, production: ['CITY'], foodConsumption: 1 },
+    SCOUT: { name: 'Scout', cost: 5, description: "Able to move quicker over harder terrain", goldCost: 10, strength: 5, move: 3, production: ['CITY'], foodConsumption: 1 },
     WARRIOR: { name: 'Warrior', description: "Basic attack unit", cost: 10, goldCost: 30, strength: 20, move: 1, range: 1, production: ['CITY'], foodConsumption: 1 },
-    ARCHER: { name: 'Archer', description: "Ranged attack unit", cost: 20, goldCost: 40, strength: 10, move: 1, range: 2, production: ['CITY'], requires: 'ARCHERY', foodConsumption: 1 },
-    SPEARMAN: { name: 'Spearman', description: "Stronger attack unit", cost: 20, goldCost: 50, strength: 30, move: 1, range: 1, production: ['CITY'], requires: 'BRONZE_WORKING', foodConsumption: 1 },
+    ARCHER: { name: 'Archer', description: "Ranged attack unit", cost: 20, goldCost: 40, strength: 15, move: 1, range: 2, production: ['CITY'], requires: 'ARCHERY', foodConsumption: 1 },
+    SPEARMAN: { name: 'Spearman', description: "Stronger attack unit", cost: 20, goldCost: 50, strength: 15, move: 2, range: 1, production: ['CITY'], requires: 'BRONZE_WORKING', foodConsumption: 1 },
     GALLEY: { name: 'Galley', description: "uh", cost: 30, goldCost: 120, strength: 10, move: 3, production: ['PORT'], requires: 'SEAFARING', naval: true, foodConsumption: 3 }
 };
 
