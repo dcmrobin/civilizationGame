@@ -1367,6 +1367,10 @@ function canBuildBuilding(player, buildingType, x, y) {
     const buildingDef = BUILDING_TYPES[buildingType];
     if (!buildingDef) return false;
 
+    if (findBuildingAt(x, y) || findCityAt(x, y) || findUnitAt(x, y)) {
+        return false;
+    }
+
     // Check if player has researched required technology
     if (buildingDef.requires && !player.researchedTechs.has(buildingDef.requires)) {
         return false;
@@ -1392,12 +1396,24 @@ function canBuildBuilding(player, buildingType, x, y) {
             if (city && city.player === player.id) {
                 // Check if the city already has a library
                 const hasLibrary = gameState.buildings.some(b => 
-                    b.type === 'LIBRARY' && b.player === player.id && 
+                    b.type === 'LIBRARY' && 
+                    b.player === player.id && 
                     Math.abs(b.x - city.x) + Math.abs(b.y - city.y) <= 1
                 );
                 if (buildingType === 'LIBRARY' && hasLibrary) {
                     return false; // Prevent building another library for this city
                 }
+
+                // Check if the city already has 2 granaries
+                const nearbyGranaries = gameState.buildings.filter(b => 
+                    b.type === 'GRANARY' && 
+                    b.player === player.id &&
+                    Math.abs(b.x - city.x) + Math.abs(b.y - city.y) <= 1
+                ).length;
+                if (buildingType === 'GRANARY' && nearbyGranaries >= 2) {
+                    return false; // Prevent building more than 2 granaries per city
+                }
+
                 return true;
             }
         }
@@ -2121,59 +2137,115 @@ function aiTurn(aiPlayer) {
             const unitType = UNIT_TYPES[unit.type];
 
             if (unit.type === 'SETTLER') {
-                // Check the current tile's score
-                /*const currentTileScore = evaluateTileScore(unit.x, unit.y, aiPlayer);
-            
-                // Check if the current tile is better than nearby opportunities
-                if (currentTileScore >= 18 && !findCityAt(unit.x, unit.y)) {
-                    logMessage(`${aiPlayer.name}'s Settler is founding a city at (${unit.x}, ${unit.y}).`, aiPlayer.id);
-                    foundCity(unit, unit.x, unit.y);
-                    return;
-                }*/
-            
-                // Find the best nearby opportunity
-                const validTile = expansionOpportunities.find(opportunity =>
-                    Math.abs(unit.x - opportunity.x) + Math.abs(unit.y - opportunity.y) <= 1 &&
-                    opportunity.score >= 18 &&
-                    !findCityAt(opportunity.x, opportunity.y) // Ensure no city exists on the tile
-                );
-            
-                if (validTile) {
-                    const distance = Math.abs(unit.x - validTile.x) + Math.abs(unit.y - validTile.y);
-                    if (distance === 1) {
-                        logMessage(`${aiPlayer.name}'s Settler is founding a city at (${validTile.x}, ${validTile.y}).`, aiPlayer.id);
-                        foundCity(unit, validTile.x, validTile.y);
+                // If the settler is already moving toward a target, continue moving
+                if (unit.targetTile) {
+                    const target = unit.targetTile;
+                    const distance = Math.abs(unit.x - target.x) + Math.abs(unit.y - target.y);
+                    
+                    if (distance === 0) {
+                        // Reached target - check if it's still valid
+                        if (evaluateTileScore(unit.x, unit.y, aiPlayer) >= 18 && !findCityAt(unit.x, unit.y)) {
+                            //logMessage(`${aiPlayer.name}'s Settler is founding a city at (${unit.x}, ${unit.y}).`, aiPlayer.id);
+                            foundCity(unit, unit.x, unit.y);
+                            unit.targetTile = null;
+                        } else {
+                            // Target is no longer valid, clear it
+                            unit.targetTile = null;
+                        }
                     } else {
-                        logMessage(`${aiPlayer.name}'s Settler is moving toward a valid tile at (${validTile.x}, ${validTile.y}).`, aiPlayer.id);
-                        const path = findPath(unit.x, unit.y, validTile.x, validTile.y, unit);
+                        // Continue moving toward target
+                        const path = findPath(unit.x, unit.y, target.x, target.y, unit);
                         if (path.length > 0) {
                             const nextStep = path[0];
                             if (canMoveTo(unit, nextStep.x, nextStep.y)) {
                                 moveUnit(unit, nextStep.x, nextStep.y);
+                            } else {
+                                // Path blocked, clear target
+                                unit.targetTile = null;
                             }
+                        } else {
+                            // No path found, clear target
+                            unit.targetTile = null;
                         }
                     }
-                    continue;
-                } else {
-                    // No valid tile nearby, continue exploring
-                    const nextOpportunity = expansionOpportunities.find(opportunity =>
-                        !findCityAt(opportunity.x, opportunity.y) // Ensure no city exists on the tile
-                    );
-                    if (nextOpportunity) {
-                        logMessage(`${aiPlayer.name}'s Settler is exploring toward a potential tile at (${nextOpportunity.x}, ${nextOpportunity.y}).`, aiPlayer.id);
-                        const path = findPath(unit.x, unit.y, nextOpportunity.x, nextOpportunity.y, unit);
+                    return;
+                }
+            
+                // No current target - evaluate nearby tiles
+                const radius = 5; // Look within this radius
+                const potentialTiles = [];
+                
+                for (let dy = -radius; dy <= radius; dy++) {
+                    for (let dx = -radius; dx <= radius; dx++) {
+                        const nx = unit.x + dx;
+                        const ny = unit.y + dy;
+                        
+                        // Skip if out of bounds
+                        if (ny < 0 || ny >= gameState.map.length || nx < 0 || nx >= gameState.map[0].length) {
+                            continue;
+                        }
+                        
+                        // Skip if it's ocean/coast or otherwise unmovable
+                        if (!canMoveTo(unit, nx, ny)) {
+                            continue;
+                        }
+                        
+                        // Skip if there's already a city here
+                        if (findCityAt(nx, ny) || findBuildingAt(nx, ny)) {
+                            continue;
+                        }
+                        
+                        // Evaluate the tile
+                        const score = evaluateTileScore(nx, ny, aiPlayer);
+                        if (score >= 18) { // Only consider good enough tiles
+                            potentialTiles.push({
+                                x: nx,
+                                y: ny,
+                                score: score,
+                                distance: Math.abs(dx) + Math.abs(dy)
+                            });
+                        }
+                    }
+                }
+                
+                // Sort by score (highest first), then by distance (closest first)
+                potentialTiles.sort((a, b) => {
+                    if (b.score !== a.score) return b.score - a.score;
+                    return a.distance - b.distance;
+                });
+                
+                // Pick the best available tile
+                if (potentialTiles.length > 0) {
+                    const bestTile = potentialTiles[0];
+                    unit.targetTile = { x: bestTile.x, y: bestTile.y };
+                    
+                    // Check if we're already on the tile
+                    if (unit.x === bestTile.x && unit.y === bestTile.y) {
+                        //logMessage(`${aiPlayer.name}'s Settler is founding a city at (${bestTile.x}, ${bestTile.y}).`, aiPlayer.id);
+                        foundCity(unit, bestTile.x, bestTile.y);
+                        unit.targetTile = null;
+                    } else {
+                        // Move toward the tile
+                        const path = findPath(unit.x, unit.y, bestTile.x, bestTile.y, unit);
                         if (path.length > 0) {
                             const nextStep = path[0];
                             if (canMoveTo(unit, nextStep.x, nextStep.y)) {
-                                moveUnit(unit, nextStep.x, nextStep.y); // Use moveUnit to handle multi-turn movement
+                                //logMessage(`${aiPlayer.name}'s Settler is moving toward a high-scoring tile at (${bestTile.x}, ${bestTile.y}).`, aiPlayer.id);
+                                moveUnit(unit, nextStep.x, nextStep.y);
+                            } else {
+                                // Can't move to next step, clear target
+                                unit.targetTile = null;
                             }
+                        } else {
+                            // No path found, clear target
+                            unit.targetTile = null;
                         }
-                    } else {
-                        logMessage(`${aiPlayer.name}'s Settler is exploring the map as no valid opportunities are nearby.`, aiPlayer.id);
-                        explore(unit, aiPlayer);
                     }
+                } else {
+                    // No good tiles found nearby - explore randomly
+                    explore(unit, aiPlayer);
                 }
-            
+                
                 // Ensure the settler does not move again this turn
                 unit.moves = 0;
             } else if (target && target.player !== undefined) {
@@ -2714,6 +2786,13 @@ function showCityPanel(city) {
         Math.abs(b.y - city.y) <= 1
     );
 
+    // Count nearby granaries
+    const nearbyGranaries = gameState.buildings.filter(b => 
+        b.type === 'GRANARY' && 
+        b.player === player.id &&
+        Math.abs(b.x - city.x) + Math.abs(b.y - city.y) <= 1
+    ).length;
+
     // Unit production
     const unitProductionElement = document.getElementById('unit-production');
     for (const [unitType, unitDef] of Object.entries(UNIT_TYPES)) {
@@ -2724,7 +2803,7 @@ function showCityPanel(city) {
 
         const button = document.createElement('button');
         button.textContent = `${unitDef.name} (${unitDef.goldCost} gold)`;
-        button.title = unitDef.description || "No description available"; // Add description as tooltip
+        button.title = unitDef.description || "No description available";
         button.onclick = () => startUnitProduction(unitType, city.x, city.y);
         unitProductionElement.appendChild(button);
     }
@@ -2739,7 +2818,7 @@ function showCityPanel(city) {
 
         const button = document.createElement('button');
         button.textContent = `${buildingDef.name} (${buildingDef.goldCost} gold)`;
-        button.title = buildingDef.description || "No description available"; // Add description as tooltip
+        button.title = buildingDef.description || "No description available";
 
         // Disable the button if there is an ongoing construction
         if (hasOngoingConstruction) {
@@ -2747,7 +2826,7 @@ function showCityPanel(city) {
             button.title = "A building is already under construction near this city.";
         }
 
-        // Check if the building is a library and if one already exists near the city
+        // Check for library limit
         if (buildingType === 'LIBRARY') {
             const hasLibrary = gameState.buildings.some(b =>
                 b.type === 'LIBRARY' &&
@@ -2755,9 +2834,15 @@ function showCityPanel(city) {
                 Math.abs(b.x - city.x) + Math.abs(b.y - city.y) <= 1
             );
             if (hasLibrary) {
-                button.disabled = true; // Disable the button if a library exists
+                button.disabled = true;
                 button.title = "A library already exists near this city.";
             }
+        }
+
+        // Check for granary limit
+        if (buildingType === 'GRANARY' && nearbyGranaries >= 2) {
+            button.disabled = true;
+            button.title = "This city already has the maximum of 2 granaries nearby.";
         }
 
         button.onclick = () => startBuildingConstruction(city.x, city.y, buildingType);
