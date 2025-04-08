@@ -2039,7 +2039,30 @@ function aiTurn(aiPlayer) {
 
             // Default to economic focus if no pressing needs
             if (options.length === 0 && foodBalance < 1) {
-                // Maybe build something that generates food in future updates
+                // Check if the AI has researched Pottery and has enough gold for a Granary
+                if (aiPlayer.researchedTechs.has('POTTERY') && aiPlayer.gold >= BUILDING_TYPES.GRANARY.goldCost) {
+                    for (const city of aiPlayer.cities) {
+                        const directions = [
+                            { dx: 0, dy: -1 }, { dx: 1, dy: 0 },
+                            { dx: 0, dy: 1 }, { dx: -1, dy: 0 }
+                        ].sort(() => Math.random() - 0.5); // Randomize direction order
+
+                        for (const dir of directions) {
+                            const nx = city.x + dir.dx;
+                            const ny = city.y + dir.dy;
+
+                            if (ny >= 0 && ny < gameState.map.length &&
+                                nx >= 0 && nx < gameState.map[0].length &&
+                                canBuildBuilding(aiPlayer, 'GRANARY', nx, ny)) {
+                                
+                                if (buildBuilding(aiPlayer, 'GRANARY', nx, ny)) {
+                                    logMessage(`${aiPlayer.name} started building a Granary near ${city.name}.`, aiPlayer.id);
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
                 continue;
             }
 
