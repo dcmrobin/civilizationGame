@@ -211,6 +211,31 @@ button {
     box-shadow: 0 0 10px rgba(40, 167, 69, 0.3);
 }
 
+.tech-node.disabled-click {
+    opacity: 0.7;
+    cursor: not-allowed;
+    position: relative;
+}
+
+.research-status {
+    margin-bottom: 20px;
+    padding: 10px;
+    background-color: #e2f0fd;
+    border-radius: 5px;
+    border-left: 4px solid #007bff;
+}
+
+.current-research {
+    font-size: 0.9em;
+    margin-bottom: 5px;
+}
+
+.research-progress {
+    font-size: 0.8em;
+    color: #007bff;
+    font-weight: bold;
+}
+
 .tech-node.available {
     cursor: pointer;
 }

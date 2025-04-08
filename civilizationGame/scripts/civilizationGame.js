@@ -2751,6 +2751,9 @@ function showTechTree() {
     const techTreeElement = document.getElementById('tech-tree');
     techTreeElement.innerHTML = '<div class="tech-tree-container"></div>';
     const container = techTreeElement.querySelector('.tech-tree-container');
+
+    // Check if player is already researching something
+    const isResearching = currentPlayer.currentResearch !== null;
     
     // Calculate tech levels (depth in the tree)
     const techLevels = {};
@@ -2829,7 +2832,11 @@ function showTechTree() {
                 techElement.classList.add('researched');
             } else if (canResearchTech(currentPlayer, techId)) {
                 techElement.classList.add('available');
-                techElement.addEventListener('click', () => selectTech(techId));
+                if (!isResearching) {  // Only make clickable if not already researching
+                    techElement.addEventListener('click', () => selectTech(techId));
+                } else {
+                    techElement.classList.add('disabled-click');
+                }
             } else {
                 techElement.classList.add('unavailable');
             }
@@ -2901,6 +2908,17 @@ function showTechTree() {
             }
         }
     }, 50);
+
+    if (currentPlayer.currentResearch) {
+        const researchStatus = document.createElement('div');
+        researchStatus.className = 'research-status';
+        researchStatus.innerHTML = `
+            <div class="current-research">
+                Currently researching: <strong>${TECH_TREE[currentPlayer.currentResearch].name}</strong>
+            </div>
+        `;
+        container.prepend(researchStatus);
+    }
     
     document.getElementById('tech-panel').style.display = 'block';
 }
@@ -2922,10 +2940,18 @@ function canResearchTech(player, techId) {
 
 function selectTech(techId) {
     const currentPlayer = gameState.players[gameState.currentPlayer];
+    
+    // Prevent changing research if already researching something
+    if (currentPlayer.currentResearch !== null) {
+        logMessage(`You're already researching ${TECH_TREE[currentPlayer.currentResearch].name}. Finish it first!`, currentPlayer.id);
+        return;
+    }
+    
     currentPlayer.currentResearch = techId;
     currentPlayer.research = 0;
     hideTechTree();
     updateUI();
+    logMessage(`Started researching ${TECH_TREE[techId].name}.`, currentPlayer.id);
 }
 
 function hideTechTree() {
