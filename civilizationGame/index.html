@@ -75,7 +75,13 @@
         
         <div id="tech-panel" style="display: none; width: 800px; padding: 10px; background-color: #eee; border: 1px solid #999; margin-bottom: 10px;">
             <h3>Technology Tree</h3>
-            <div id="tech-tree"></div>
+            <div class="tech-tree-viewport">
+                <div class="tech-tree-container"></div>
+                <div class="tech-zoom-controls">
+                    <div class="tech-zoom-btn" onclick="zoomTechTree(1.2)">+</div>
+                    <div class="tech-zoom-btn" onclick="zoomTechTree(0.8)">-</div>
+                </div>
+            </div>
             <button id="close-tech">Close</button>
         </div>
         

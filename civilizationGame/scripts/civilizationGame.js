@@ -153,6 +153,11 @@ const gameState = {
     buildingConstruction: null // Tracks current building being placed
 };
 
+let isPanning = false;
+let startPanX, startPanY;
+let currentPanX = 0, currentPanY = 0;
+let scale = 1;
+
 // Perlin noise implementation (unchanged)
 const Perlin = {
     gradients: {},
@@ -2748,10 +2753,13 @@ function hideDiplomacy() {
 
 function showTechTree() {
     const currentPlayer = gameState.players[gameState.currentPlayer];
-    const techTreeElement = document.getElementById('tech-tree');
-    techTreeElement.innerHTML = '<div class="tech-tree-container"></div>';
-    const container = techTreeElement.querySelector('.tech-tree-container');
-
+    const techPanel = document.getElementById('tech-panel');
+    
+    // Clear existing content but preserve the viewport structure
+    const viewport = techPanel.querySelector('.tech-tree-viewport');
+    const container = techPanel.querySelector('.tech-tree-container');
+    container.innerHTML = '';
+    
     // Check if player is already researching something
     const isResearching = currentPlayer.currentResearch !== null;
     
@@ -2919,8 +2927,97 @@ function showTechTree() {
         `;
         container.prepend(researchStatus);
     }
+
+    // Initialize panning event listeners
+    setupTechTreePanning(viewport, container);
     
     document.getElementById('tech-panel').style.display = 'block';
+}
+
+function zoomTechTree(factor) {
+    const container = document.querySelector('.tech-tree-container');
+    const viewport = document.querySelector('.tech-tree-viewport');
+    const viewportRect = viewport.getBoundingClientRect();
+    const centerX = viewportRect.width / 2;
+    const centerY = viewportRect.height / 2;
+    
+    const newScale = scale * factor;
+    scale = Math.min(Math.max(0.5, newScale), 2); // Limit zoom
+    
+    // Adjust pan to zoom toward center
+    currentPanX = centerX - (centerX - currentPanX) * factor;
+    currentPanY = centerY - (centerY - currentPanY) * factor;
+    
+    updateContainerTransform(container);
+}
+
+function setupTechTreePanning(viewport, container) {
+    // Reset position when opening the tech tree
+    currentPanX = 0;
+    currentPanY = 0;
+    scale = 1;
+    updateContainerTransform(container);
+    
+    // Middle mouse button panning
+    viewport.addEventListener('mousedown', (e) => {
+        if (e.button === 1) { // Middle mouse button
+            e.preventDefault();
+            isPanning = true;
+            startPanX = e.clientX - currentPanX;
+            startPanY = e.clientY - currentPanY;
+            viewport.style.cursor = 'grabbing';
+        }
+    });
+    
+    document.addEventListener('mouseup', (e) => {
+        if (e.button === 1) { // Middle mouse button
+            isPanning = false;
+            viewport.style.cursor = 'grab';
+        }
+    });
+    
+    document.addEventListener('mousemove', (e) => {
+        if (!isPanning) return;
+        e.preventDefault();
+        currentPanX = e.clientX - startPanX;
+        currentPanY = e.clientY - startPanY;
+        updateContainerTransform(container);
+    });
+    
+    // Mouse wheel zooming (optional)
+    viewport.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        const zoomIntensity = 0.1;
+        const mouseX = e.clientX - viewport.getBoundingClientRect().left;
+        const mouseY = e.clientY - viewport.getBoundingClientRect().top;
+        
+        const newScale = e.deltaY < 0 ? scale * (1 + zoomIntensity) : scale * (1 - zoomIntensity);
+        scale = Math.min(Math.max(0.5, newScale), 2); // Limit zoom between 0.5x and 2x
+        
+        // Adjust pan to zoom toward mouse position
+        currentPanX = mouseX - (mouseX - currentPanX) * (scale / (scale - (e.deltaY < 0 ? zoomIntensity : -zoomIntensity)));
+        currentPanY = mouseY - (mouseY - currentPanY) * (scale / (scale - (e.deltaY < 0 ? zoomIntensity : -zoomIntensity)));
+        
+        updateContainerTransform(container);
+    });
+    
+    // Reset cursor style
+    viewport.style.cursor = 'grab';
+}
+
+function updateContainerTransform(container) {
+    container.style.transform = `translate(${currentPanX}px, ${currentPanY}px) scale(${scale})`;
+}
+
+// Update your hideTechTree function to clean up
+function hideTechTree() {
+    document.getElementById('tech-panel').style.display = 'none';
+    // Clean up event listeners
+    const viewport = document.querySelector('.tech-tree-viewport');
+    if (viewport) {
+        viewport.style.cursor = '';
+    }
+    isPanning = false;
 }
 
 function canResearchTech(player, techId) {
@@ -2952,10 +3049,6 @@ function selectTech(techId) {
     hideTechTree();
     updateUI();
     logMessage(`Started researching ${TECH_TREE[techId].name}.`, currentPlayer.id);
-}
-
-function hideTechTree() {
-    document.getElementById('tech-panel').style.display = 'none';
 }
 
 function showCityPanel(city) {
