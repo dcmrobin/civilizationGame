@@ -921,10 +921,18 @@ function canMoveTo(unit, x, y, ignoreUnits = false) {
         }
     }
 
-    // Check if there's a building on this tile (can't move onto buildings)
+    // Check if there's a building on this tile
     const building = findBuildingAt(x, y);
-    if (building && building.player !== unit.player) {
+    if (building) {
+        // Can't move onto any building, even friendly ones
         return false;
+    }
+
+    // Check if there's a city on this tile
+    const city = findCityAt(x, y);
+    if (city) {
+        // Can only move onto enemy cities
+        return city.player !== unit.player;
     }
 
     // If ignoring units, skip the unit check
@@ -935,7 +943,7 @@ function canMoveTo(unit, x, y, ignoreUnits = false) {
     // Check if another unit is already on the tile
     const otherUnit = findUnitAt(x, y);
     if (otherUnit) {
-        // Prevent moving onto any friendly unit's tile
+        // Can't move onto any friendly unit's tile
         if (otherUnit.player === unit.player) {
             return false;
         }
