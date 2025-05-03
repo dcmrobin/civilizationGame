@@ -16,7 +16,16 @@ const UNIT_TYPES = {
     WARRIOR: { name: 'Warrior', description: "Basic attack unit", cost: 10, goldCost: 30, strength: 20, move: 1, range: 1, production: ['CITY'], foodConsumption: 1 },
     ARCHER: { name: 'Archer', description: "Ranged attack unit", cost: 20, goldCost: 40, strength: 15, move: 1, range: 2, production: ['CITY'], requires: 'ARCHERY', foodConsumption: 1 },
     SPEARMAN: { name: 'Spearman', description: "Stronger attack unit", cost: 20, goldCost: 50, strength: 15, move: 2, range: 1, production: ['CITY'], requires: 'BRONZE_WORKING', foodConsumption: 1 },
-    GALLEY: { name: 'Galley', description: "uh", cost: 30, goldCost: 120, strength: 10, move: 3, production: ['PORT'], requires: 'SEAFARING', naval: true, foodConsumption: 3 }
+    GALLEY: { name: 'Galley', description: "Basic naval unit for exploration and combat", cost: 30, goldCost: 120, strength: 10, move: 3, production: ['PORT'], requires: 'SEAFARING', naval: true, foodConsumption: 3 },
+    SWORDSMAN: { name: 'Swordsman', description: "Powerful melee unit with iron weapons", cost: 35, goldCost: 80, strength: 30, move: 1, range: 1, production: ['CITY'], requires: 'IRON_WORKING', foodConsumption: 2 },
+    CATAPULT: { name: 'Catapult', description: "Siege weapon with long range but vulnerable up close", cost: 40, goldCost: 100, strength: 25, move: 1, range: 3, production: ['CITY'], requires: 'MATHEMATICS', foodConsumption: 3 },
+    HORSEMAN: { name: 'Horseman', description: "Fast cavalry unit with high mobility", cost: 30, goldCost: 90, strength: 25, move: 3, range: 1, production: ['CITY'], requires: 'HORSEBACK_RIDING', foodConsumption: 2 },
+    TRIREME: { name: 'Trireme', description: "Stronger naval unit for coastal warfare", cost: 40, goldCost: 150, strength: 25, move: 3, production: ['PORT'], requires: 'NAVAL_WARFARE', naval: true, foodConsumption: 4 },
+    CROSSBOWMAN: { name: 'Crossbowman', description: "Advanced ranged unit with armor penetration", cost: 45, goldCost: 120, strength: 35, move: 1, range: 2, production: ['CITY'], requires: 'MACHINERY', foodConsumption: 2 },
+    KNIGHT: { name: 'Knight', description: "Heavy cavalry with strong attack and defense", cost: 50, goldCost: 150, strength: 40, move: 2, range: 1, production: ['CITY'], requires: 'CHIVALRY', foodConsumption: 3 },
+    CANNON: { name: 'Cannon', description: "Powerful siege weapon with area damage", cost: 60, goldCost: 180, strength: 45, move: 1, range: 3, production: ['CITY'], requires: 'GUNPOWDER', foodConsumption: 4 },
+    FRIGATE: { name: 'Frigate', description: "Advanced naval unit with ranged attacks", cost: 70, goldCost: 200, strength: 50, move: 4, range: 2, production: ['PORT'], requires: 'NAVIGATION', naval: true, foodConsumption: 5 },
+    MUSKETEER: { name: 'Musketeer', description: "Early gunpowder infantry unit", cost: 55, goldCost: 160, strength: 45, move: 1, range: 2, production: ['CITY'], requires: 'GUNPOWDER', foodConsumption: 3 }
 };
 
 // Building types
@@ -48,6 +57,20 @@ const BUILDING_TYPES = {
         icon: 'LB',
         color: '#0047ab',
         health: 50
+    },
+    UNIVERSITY: {
+        name: 'University',
+        goldCost: 150,
+        productionCost: 80,
+        requires: 'SCIENTIFIC_THEORY',
+        description: 'Greatly increases research output by 25% in nearby cities',
+        effects: {
+            researchMultiplier: 1.25
+        },
+        constructionTurns: 6,
+        icon: 'UN',
+        color: '#800080',
+        health: 60
     }
 };
 
@@ -56,8 +79,8 @@ const TECH_TREE = {
     POTTERY: { 
         name: 'Pottery', 
         cost: 50, 
-        leadsTo: ['WRITING', 'BRONZE_WORKING'], 
-        description: 'Allows Granary building' 
+        leadsTo: ['WRITING', 'BRONZE_WORKING', 'HORSEBACK_RIDING'], 
+        description: 'Allows Granary building and Worker units' 
     },
     
     // Tier 1
@@ -73,6 +96,18 @@ const TECH_TREE = {
         leadsTo: ['IRON_WORKING', 'ARCHERY'], 
         description: 'Allows Spearman units' 
     },
+    HORSEBACK_RIDING: {
+        name: 'Horseback Riding',
+        cost: 80,
+        leadsTo: ['CHIVALRY'],
+        description: 'Allows Horseman units'
+    },
+    SEAFARING: {
+        name: 'Seafaring',
+        cost: 70,
+        leadsTo: ['NAVAL_WARFARE'],
+        description: 'Allows Galley units'
+    },
     
     // Tier 2
     PHILOSOPHY: { 
@@ -84,8 +119,8 @@ const TECH_TREE = {
     MATHEMATICS: { 
         name: 'Mathematics', 
         cost: 100, 
-        leadsTo: ['PHYSICS'], 
-        description: 'Improves city defenses' 
+        leadsTo: ['PHYSICS', 'MACHINERY'], 
+        description: 'Allows Catapult units and improves city defenses' 
     },
     IRON_WORKING: { 
         name: 'Iron Working', 
@@ -96,8 +131,14 @@ const TECH_TREE = {
     ARCHERY: { 
         name: 'Archery', 
         cost: 60, 
-        leadsTo: [], 
+        leadsTo: ['MACHINERY'], 
         description: 'Allows Archer units' 
+    },
+    NAVAL_WARFARE: {
+        name: 'Naval Warfare',
+        cost: 100,
+        leadsTo: ['NAVIGATION'],
+        description: 'Allows Trireme units'
     },
     
     // Tier 3
@@ -110,14 +151,32 @@ const TECH_TREE = {
     PHYSICS: { 
         name: 'Physics', 
         cost: 150, 
-        leadsTo: [], 
+        leadsTo: ['GUNPOWDER'], 
         description: 'Allows advanced military units' 
     },
     STEEL: { 
         name: 'Steel', 
         cost: 150, 
-        leadsTo: [], 
+        leadsTo: ['GUNPOWDER'], 
         description: 'Allows advanced weapons' 
+    },
+    MACHINERY: {
+        name: 'Machinery',
+        cost: 140,
+        leadsTo: ['GUNPOWDER'],
+        description: 'Allows Crossbowman units'
+    },
+    CHIVALRY: {
+        name: 'Chivalry',
+        cost: 160,
+        leadsTo: [],
+        description: 'Allows Knight units'
+    },
+    NAVIGATION: {
+        name: 'Navigation',
+        cost: 160,
+        leadsTo: [],
+        description: 'Allows Frigate units'
     },
     
     // Tier 4
@@ -126,6 +185,12 @@ const TECH_TREE = {
         cost: 200, 
         leadsTo: ['BIOLOGY'], 
         description: 'Allows Universities' 
+    },
+    GUNPOWDER: {
+        name: 'Gunpowder',
+        cost: 200,
+        leadsTo: [],
+        description: 'Allows Cannon and Musketeer units'
     },
     
     // Tier 5
@@ -1020,8 +1085,8 @@ function resolveRangedCombat(attacker, target) {
     const attackerType = UNIT_TYPES[attacker.type];
     const attackerPlayer = gameState.players[attacker.player];
 
-    if (attackerType === 'SETTLER') {
-        return;
+    if (attackerType === 'SETTLER' || attackerType === 'WORKER') {
+        return; // Settlers and workers can't attack
     }
 
     if (attacker.hasAttacked) {
@@ -1029,13 +1094,18 @@ function resolveRangedCombat(attacker, target) {
         return;
     }
 
-    if (target.health !== undefined) {
+    // Determine if target is a city, unit, or building
+    if (target.health !== undefined && !target.type) {
         // Target is a city
         const city = target;
         const cityPlayer = gameState.players[city.player];
 
-        const damage = attackerType.strength * (1 + Math.random() * 0.2);
-        city.health -= damage;
+        // Calculate damage based on attacker strength with some randomness
+        const baseDamage = attackerType.strength;
+        const damageVariation = baseDamage * 0.2; // ±20% variation
+        const damage = Math.max(1, baseDamage + (Math.random() * damageVariation * 2 - damageVariation));
+        
+        city.health -= Math.round(damage);
 
         attackerPlayer.relations[cityPlayer.id].hasMet = true;
         cityPlayer.relations[attackerPlayer.id].hasMet = true;
@@ -1061,21 +1131,57 @@ function resolveRangedCombat(attacker, target) {
             logMessage(`${city.name} has been defeated!`, attacker.player, city.player);
             captureOrDestroyCity(attackerPlayer, cityPlayer, city);
         }
+    } else if (target.type && BUILDING_TYPES[target.type]) {
+        // Target is a building
+        attackBuilding(attacker, target);
     } else {
         // Target is a unit
         const defender = target;
+        const defenderType = UNIT_TYPES[defender.type];
         const defenderPlayer = gameState.players[defender.player];
 
-        const damage = attackerType.strength * (1 + Math.random() * 0.2);
-        defenderPlayer.units = defenderPlayer.units.filter(u => u !== defender);
+        // Calculate combat odds based on strength ratio with some randomness
+        const attackerStrength = attackerType.strength * (0.8 + Math.random() * 0.4); // 80-120% of base strength
+        const defenderStrength = defenderType.strength * (0.8 + Math.random() * 0.4); // 80-120% of base strength
+        
+        const totalStrength = attackerStrength + defenderStrength;
+        const attackerWinChance = attackerStrength / totalStrength;
+        
+        // 10% chance for underdog to win regardless of strength
+        const underdogBonus = (attackerStrength < defenderStrength && Math.random() < 0.1) ? 0.3 : 0;
+        const finalWinChance = Math.min(0.9, Math.max(0.1, attackerWinChance + underdogBonus));
+
+        if (Math.random() < finalWinChance) {
+            // Attacker wins
+            defenderPlayer.units = defenderPlayer.units.filter(u => u !== defender);
+
+            // Calculate damage to attacker (20-40% of defender's strength)
+            const damageToAttacker = Math.round(defenderStrength * (0.2 + Math.random() * 0.2));
+            if (damageToAttacker > 0) {
+                logMessage(`${attackerPlayer.name}'s ${attacker.type} defeated ${defenderPlayer.name}'s ${defender.type} but took ${damageToAttacker} damage.`, attacker.player, defender.player);
+            } else {
+                logMessage(`${attackerPlayer.name}'s ${attacker.type} defeated ${defenderPlayer.name}'s ${defender.type}.`, attacker.player, defender.player);
+            }
+
+            // In a future update, we could implement unit health based on this damage
+        } else {
+            // Defender wins
+            attackerPlayer.units = attackerPlayer.units.filter(u => u !== attacker);
+
+            // Calculate damage to defender (20-40% of attacker's strength)
+            const damageToDefender = Math.round(attackerStrength * (0.2 + Math.random() * 0.2));
+            if (damageToDefender > 0) {
+                logMessage(`${defenderPlayer.name}'s ${defender.type} defeated ${attackerPlayer.name}'s ${attacker.type} but took ${damageToDefender} damage.`, defender.player, attacker.player);
+            } else {
+                logMessage(`${defenderPlayer.name}'s ${defender.type} defeated ${attackerPlayer.name}'s ${attacker.type}.`, defender.player, attacker.player);
+            }
+        }
 
         attackerPlayer.relations[defender.player].hasMet = true;
         defenderPlayer.relations[attacker.player].hasMet = true;
 
         defenderPlayer.relations[attacker.player].attitude = Math.max(0, defenderPlayer.relations[attacker.player].attitude - 10);
         attackerPlayer.relations[defender.player].attitude = Math.max(0, attackerPlayer.relations[defender.player].attitude - 10);
-
-        logMessage(`${attackerPlayer.name}'s ${attacker.type} defeated ${defenderPlayer.name}'s ${defender.type}.`, attacker.player, defender.player);
 
         // Check if allies come to help
         for (const ally of gameState.players) {
@@ -1091,6 +1197,7 @@ function resolveRangedCombat(attacker, target) {
     }
 
     attacker.hasAttacked = true;
+    gameState.mapDirty = true;
 }
 
 function attackBuilding(attacker, building) {
