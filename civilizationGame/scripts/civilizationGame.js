@@ -2157,7 +2157,7 @@ function aiTurn(aiPlayer) {
 
     // Calculate military strength
     const militaryUnits = aiPlayer.units.filter(unit => 
-        unit.type !== 'SETTLER' && unit.type !== 'WORKER'
+        unit.type !== 'SETTLER' && unit.type !== 'WORKER' && unit.type !== 'SCOUT'
     );
     const militaryStrength = militaryUnits.reduce((sum, unit) => 
         sum + UNIT_TYPES[unit.type].strength, 0
@@ -2169,31 +2169,35 @@ function aiTurn(aiPlayer) {
     );
     const militaryNeeded = totalThreatStrength > militaryStrength * 1.2; // Need 20% more strength than threats
 
+    // Check if at war or under threat
+    const isAtWar = Object.values(aiPlayer.relations).some(rel => rel.attitude < 40);
+    const isUnderThreat = threats.length > 0 || militaryNeeded;
+
     // Count current scouts
     const scoutCount = aiPlayer.units.filter(unit => unit.type === 'SCOUT').length;
-    const needsScouts = scoutCount < 2 && aiPlayer.cities.length > 0; // Maintain at least 2 scouts
+    const needsScouts = scoutCount < 2 && aiPlayer.cities.length > 0 && !isAtWar && !isUnderThreat; // Only build scouts when not at war
 
     // City production logic
     for (const city of aiPlayer.cities) {
         if (!city.currentProduction) {
             const options = [];
             
-            // Consider scouts for exploration
+            // Consider scouts for exploration only when not at war
             if (needsScouts && foodBalance > 0) {
                 options.push('SCOUT');
             }
             
             // Only consider settlers if we have positive food balance and few cities
             if (expansionOpportunities.length > 0 && foodBalance > 2 && 
-                aiPlayer.cities.length < 3 && Math.random() > 0.5) {
+                aiPlayer.cities.length < 3 && Math.random() > 0.5 && !isAtWar && !isUnderThreat) {
                 options.push('SETTLER');
             }
 
             // Military units based on threat level and current military strength
-            if (militaryNeeded && foodBalance > 0) {
+            if ((militaryNeeded || isAtWar) && foodBalance > 0) {
                 // Don't overproduce if we're already at food limit
                 if (aiPlayer.units.length < aiPlayer.cities.length * 4) {
-                    // Add variety to military units
+                    // Add variety to military units, prioritizing the most advanced available
                     const militaryOptions = [];
                     if (aiPlayer.researchedTechs.has('ARCHERY')) militaryOptions.push('ARCHER');
                     if (aiPlayer.researchedTechs.has('BRONZE_WORKING')) militaryOptions.push('SPEARMAN');
@@ -2205,13 +2209,13 @@ function aiTurn(aiPlayer) {
                         militaryOptions.push('WARRIOR');
                     }
                     
-                    // Randomly select one military unit type
-                    options.push(militaryOptions[Math.floor(Math.random() * militaryOptions.length)]);
+                    // Prioritize the most advanced unit type
+                    options.push(militaryOptions[0]);
                 }
             }
 
             // Economic focus if no pressing military needs
-            if (options.length === 0) {
+            if (options.length === 0 && !isAtWar && !isUnderThreat) {
                 // Check if we need more food
                 if (foodBalance < 1) {
                     // Check if the AI has researched Pottery and has enough gold for a Granary
@@ -2242,8 +2246,8 @@ function aiTurn(aiPlayer) {
                 continue;
             }
 
-            // Fallback to economic units if nothing else
-            if (options.length === 0 && aiPlayer.units.length < aiPlayer.cities.length * 3) {
+            // Fallback to economic units if nothing else and not at war
+            if (options.length === 0 && aiPlayer.units.length < aiPlayer.cities.length * 3 && !isAtWar && !isUnderThreat) {
                 // Consider building a library if we don't have one
                 if (aiPlayer.researchedTechs.has('WRITING') && 
                     !gameState.buildings.some(b => b.type === 'LIBRARY' && b.player === aiPlayer.id)) {
