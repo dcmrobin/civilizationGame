@@ -13,6 +13,7 @@ const TILE_TYPES = {
 const UNIT_TYPES = {
     SETTLER: { name: 'Settler', description: "Able to found cities", cost: 30, goldCost: 50, strength: 0, move: 1, production: ['CITY'], foodConsumption: 2 },
     SCOUT: { name: 'Scout', cost: 5, description: "Able to move quicker over harder terrain", goldCost: 10, strength: 5, move: 3, range: 1, production: ['CITY'], foodConsumption: 1 },
+    WORKER: { name: 'Worker', description: "Can build improvements and roads", cost: 15, goldCost: 40, strength: 0, move: 2, production: ['CITY'], requires: 'POTTERY', foodConsumption: 1 },
     WARRIOR: { name: 'Warrior', description: "Basic attack unit", cost: 10, goldCost: 30, strength: 20, move: 1, range: 1, production: ['CITY'], foodConsumption: 1 },
     ARCHER: { name: 'Archer', description: "Ranged attack unit", cost: 20, goldCost: 40, strength: 15, move: 1, range: 2, production: ['CITY'], requires: 'ARCHERY', foodConsumption: 1 },
     SPEARMAN: { name: 'Spearman', description: "Stronger attack unit", cost: 20, goldCost: 50, strength: 15, move: 2, range: 1, production: ['CITY'], requires: 'BRONZE_WORKING', foodConsumption: 1 },
@@ -1901,6 +1902,16 @@ function processPlayerTurn(player) {
             b.type === 'LIBRARY' && b.player === player.id
         ).length;
         researchIncrement += playerLibraries * 2;
+
+        // Apply Philosophy bonus (20% increase)
+        if (player.researchedTechs.has('PHILOSOPHY')) {
+            researchIncrement = Math.floor(researchIncrement * 1.2);
+        }
+
+        // Apply Education bonus (50% increase)
+        if (player.researchedTechs.has('EDUCATION')) {
+            researchIncrement = Math.floor(researchIncrement * 1.5);
+        }
         
         player.research += researchIncrement;
         
@@ -1910,6 +1921,20 @@ function processPlayerTurn(player) {
             logMessage(`${player.name} completed research on ${tech.name}.`, player.id);
             player.currentResearch = null;
             player.research = 0;
+        }
+    }
+
+    // Apply Biology effect (increased food production)
+    if (player.researchedTechs.has('BIOLOGY')) {
+        for (const city of player.cities) {
+            city.food = Math.floor(city.food * 1.25); // 25% increase in food production
+        }
+    }
+
+    // Apply Mathematics effect (improved city defenses)
+    if (player.researchedTechs.has('MATHEMATICS')) {
+        for (const city of player.cities) {
+            city.health = Math.min(150, city.health + 1); // Cities heal up to 150 health
         }
     }
 
@@ -3330,6 +3355,72 @@ function startUnitProduction(unitType, x, y) {
 function hideCityPanel() {
     document.getElementById('city-panel').style.display = 'none';
     gameState.selectedCity = null;
+}
+
+function canProduceUnit(city, unitType) {
+    const unit = UNIT_TYPES[unitType];
+    if (!unit) return false;
+    
+    // Check if the city's player has researched required technology
+    const player = gameState.players[city.player];
+    if (unit.requires && !player.researchedTechs.has(unit.requires)) {
+        return false;
+    }
+    
+    return true;
+}
+
+function calculateUnitStrength(unit) {
+    let baseStrength = UNIT_TYPES[unit.type].strength;
+    
+    // Apply Physics bonus (20% increase in unit strength)
+    const player = gameState.players[unit.player];
+    if (player.researchedTechs.has('PHYSICS')) {
+        baseStrength = Math.floor(baseStrength * 1.2);
+    }
+    
+    // Apply Steel bonus (30% increase in unit strength)
+    if (player.researchedTechs.has('STEEL')) {
+        baseStrength = Math.floor(baseStrength * 1.3);
+    }
+    
+    return baseStrength;
+}
+
+function handleCombat(attacker, defender) {
+    const attackerType = attacker.type;
+    const defenderType = defender.type;
+    const attackerPlayer = gameState.players[attacker.player];
+    const defenderPlayer = gameState.players[defender.player];
+
+    if (attackerType === 'SETTLER') {
+        return; // Settlers can't attack
+    }
+
+    // Calculate combat strength with technology bonuses
+    const attackerStrength = calculateUnitStrength(attacker);
+    const defenderStrength = calculateUnitStrength(defender);
+
+    // Calculate damage
+    const totalStrength = attackerStrength + defenderStrength;
+    const attackerDamage = Math.floor((defenderStrength / totalStrength) * 100);
+    const defenderDamage = Math.floor((attackerStrength / totalStrength) * 100);
+
+    // Apply damage
+    attacker.health = Math.max(0, attacker.health - attackerDamage);
+    defender.health = Math.max(0, defender.health - defenderDamage);
+
+    // Handle unit death
+    if (attacker.health <= 0) {
+        attackerPlayer.units = attackerPlayer.units.filter(u => u !== attacker);
+        logMessage(`${attackerPlayer.name}'s ${attackerType} was defeated!`, attackerPlayer.id);
+    }
+    if (defender.health <= 0) {
+        defenderPlayer.units = defenderPlayer.units.filter(u => u !== defender);
+        logMessage(`${defenderPlayer.name}'s ${defenderType} was defeated!`, defenderPlayer.id);
+    }
+
+    attacker.hasAttacked = true;
 }
 
 // Initialize the game when the page loads
