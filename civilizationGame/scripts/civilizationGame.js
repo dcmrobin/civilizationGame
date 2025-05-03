@@ -1733,7 +1733,81 @@ function evaluateTileScore(x, y, aiPlayer) {
     return score;
 }
 
-// End the current player's turn
+function checkWinLossConditions() {
+    const currentPlayer = gameState.players[gameState.currentPlayer];
+    
+    // Check if current player has been eliminated
+    if (currentPlayer.cities.length === 0) {
+        endGame(false);
+        return true;
+    }
+    
+    // Check if current player has won by eliminating others
+    const remainingPlayers = gameState.players.filter(player => {
+        // Skip eliminated players and allies
+        if (player.cities.length === 0) return false;
+        if (player.id === currentPlayer.id) return false;
+        return currentPlayer.relations[player.id]?.attitude < 80; // Not allied
+    });
+    
+    if (remainingPlayers.length === 0) {
+        endGame(true);
+        return true;
+    }
+    
+    return false;
+}
+
+function endGame(isVictory) {
+    // Disable game controls
+    document.getElementById('end-turn-btn').disabled = true;
+    document.getElementById('diplomacy-btn').disabled = true;
+    document.getElementById('tech-btn').disabled = true;
+    
+    // Create and show end game screen
+    const endGameScreen = document.createElement('div');
+    endGameScreen.className = 'end-game-screen';
+    endGameScreen.innerHTML = `
+        <div class="end-game-content">
+            <h2>${isVictory ? 'Victory!' : 'Defeat!'}</h2>
+            <p>${isVictory ? 'You have conquered all your enemies!' : 'Your civilization has been defeated!'}</p>
+            <button onclick="location.reload()">Play Again</button>
+        </div>
+    `;
+    document.body.appendChild(endGameScreen);
+    
+    // Add some basic styling
+    const style = document.createElement('style');
+    style.textContent = `
+        .end-game-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .end-game-content {
+            background: white;
+            padding: 2rem;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .end-game-content button {
+            margin-top: 1rem;
+            padding: 0.5rem 1rem;
+            font-size: 1.2rem;
+            cursor: pointer;
+        }
+    `;
+    document.head.appendChild(style);
+}
+
+// Modify the endTurn function to check win/loss conditions
 function endTurn() {
     const endTurnButton = document.getElementById('end-turn-btn');
     endTurnButton.disabled = true;
@@ -1741,6 +1815,11 @@ function endTurn() {
     const currentPlayer = gameState.players[gameState.currentPlayer];
     processQueuedMoves();
     processPlayerTurn(currentPlayer);
+
+    // Check win/loss conditions after processing the turn
+    if (checkWinLossConditions()) {
+        return; // Game has ended
+    }
 
     let nextPlayerIndex = (gameState.currentPlayer + 1) % gameState.players.length;
 
@@ -1752,6 +1831,11 @@ function endTurn() {
             if (!nextPlayer.isHuman) {
                 aiTurn(nextPlayer);
                 processPlayerTurn(nextPlayer);
+                
+                // Check win/loss conditions after each AI turn
+                if (checkWinLossConditions()) {
+                    return; // Game has ended
+                }
             }
 
             nextPlayerIndex = (gameState.currentPlayer + 1) % gameState.players.length;
@@ -2221,27 +2305,27 @@ function aiTurn(aiPlayer) {
                     // Check if the AI has researched Pottery and has enough gold for a Granary
                     if (aiPlayer.researchedTechs.has('POTTERY') && aiPlayer.gold >= BUILDING_TYPES.GRANARY.goldCost) {
                         for (const city of aiPlayer.cities) {
-                            const directions = [
-                                { dx: 0, dy: -1 }, { dx: 1, dy: 0 },
-                                { dx: 0, dy: 1 }, { dx: -1, dy: 0 }
+            const directions = [
+                { dx: 0, dy: -1 }, { dx: 1, dy: 0 },
+                { dx: 0, dy: 1 }, { dx: -1, dy: 0 }
                             ].sort(() => Math.random() - 0.5);
 
-                            for (const dir of directions) {
-                                const nx = city.x + dir.dx;
-                                const ny = city.y + dir.dy;
+            for (const dir of directions) {
+                const nx = city.x + dir.dx;
+                const ny = city.y + dir.dy;
 
-                                if (ny >= 0 && ny < gameState.map.length &&
-                                    nx >= 0 && nx < gameState.map[0].length &&
+                if (ny >= 0 && ny < gameState.map.length &&
+                    nx >= 0 && nx < gameState.map[0].length &&
                                     canBuildBuilding(aiPlayer, 'GRANARY', nx, ny)) {
-                                    
+                    
                                     if (buildBuilding(aiPlayer, 'GRANARY', nx, ny)) {
                                         logMessage(`${aiPlayer.name} started building a Granary near ${city.name}.`, aiPlayer.id);
-                                        break;
-                                    }
-                                }
-                            }
-                        }
+                        break;
                     }
+                }
+            }
+        }
+    }
                 }
                 continue;
             }
@@ -2252,26 +2336,26 @@ function aiTurn(aiPlayer) {
                 if (aiPlayer.researchedTechs.has('WRITING') && 
                     !gameState.buildings.some(b => b.type === 'LIBRARY' && b.player === aiPlayer.id)) {
                     // Try to build a library
-                    const directions = [
-                        { dx: 0, dy: -1 }, { dx: 1, dy: 0 },
-                        { dx: 0, dy: 1 }, { dx: -1, dy: 0 }
+                        const directions = [
+                            { dx: 0, dy: -1 }, { dx: 1, dy: 0 },
+                            { dx: 0, dy: 1 }, { dx: -1, dy: 0 }
                     ].sort(() => Math.random() - 0.5);
 
-                    for (const dir of directions) {
-                        const nx = city.x + dir.dx;
-                        const ny = city.y + dir.dy;
+                        for (const dir of directions) {
+                            const nx = city.x + dir.dx;
+                            const ny = city.y + dir.dy;
 
-                        if (ny >= 0 && ny < gameState.map.length &&
-                            nx >= 0 && nx < gameState.map[0].length &&
+                            if (ny >= 0 && ny < gameState.map.length &&
+                                nx >= 0 && nx < gameState.map[0].length &&
                             canBuildBuilding(aiPlayer, 'LIBRARY', nx, ny)) {
-                            
+                                
                             if (buildBuilding(aiPlayer, 'LIBRARY', nx, ny)) {
                                 logMessage(`${aiPlayer.name} started building a Library near ${city.name}.`, aiPlayer.id);
-                                break;
+                                    break;
+                                }
                             }
                         }
                     }
-                }
             }
 
             if (options.length > 0) {
