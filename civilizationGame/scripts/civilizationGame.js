@@ -12,7 +12,7 @@ const TILE_TYPES = {
 
 const UNIT_TYPES = {
     SETTLER: { name: 'Settler', description: "Able to found cities", cost: 30, goldCost: 50, strength: 0, move: 1, production: ['CITY'], foodConsumption: 2 },
-    SCOUT: { name: 'Scout', cost: 5, description: "Able to move quicker over harder terrain", goldCost: 10, strength: 5, move: 3, production: ['CITY'], foodConsumption: 1 },
+    SCOUT: { name: 'Scout', cost: 5, description: "Able to move quicker over harder terrain", goldCost: 10, strength: 5, move: 3, range: 1, production: ['CITY'], foodConsumption: 1 },
     WARRIOR: { name: 'Warrior', description: "Basic attack unit", cost: 10, goldCost: 30, strength: 20, move: 1, range: 1, production: ['CITY'], foodConsumption: 1 },
     ARCHER: { name: 'Archer', description: "Ranged attack unit", cost: 20, goldCost: 40, strength: 15, move: 1, range: 2, production: ['CITY'], requires: 'ARCHERY', foodConsumption: 1 },
     SPEARMAN: { name: 'Spearman', description: "Stronger attack unit", cost: 20, goldCost: 50, strength: 15, move: 2, range: 1, production: ['CITY'], requires: 'BRONZE_WORKING', foodConsumption: 1 },
@@ -1093,8 +1093,8 @@ function resolveRangedCombat(attacker, target) {
     const attackerType = UNIT_TYPES[attacker.type];
     const attackerPlayer = gameState.players[attacker.player];
 
-    if (attackerType === 'SETTLER' || attackerType === 'WORKER') {
-        return; // Settlers and workers can't attack
+    if (attackerType === 'SETTLER') {
+        return; // Settlers can't attack
     }
 
     if (attacker.hasAttacked) {
@@ -2130,118 +2130,85 @@ function aiTurn(aiPlayer) {
     const threats = assessThreats(aiPlayer);
     const expansionOpportunities = findExpansionOpportunities(aiPlayer);
 
-    // AI building construction logic
-    for (const city of aiPlayer.cities) {
-        // Skip if there is already an ongoing construction near the city
-        const hasOngoingConstruction = gameState.buildings.some(b =>
-            b.type.endsWith('_CONSTRUCTION') &&
-            b.player === aiPlayer.id &&
-            Math.abs(b.x - city.x) <= 1 &&
-            Math.abs(b.y - city.y) <= 1
-        );
-        if (hasOngoingConstruction) continue;
+    // Calculate military strength
+    const militaryUnits = aiPlayer.units.filter(unit => 
+        unit.type !== 'SETTLER' && unit.type !== 'WORKER'
+    );
+    const militaryStrength = militaryUnits.reduce((sum, unit) => 
+        sum + UNIT_TYPES[unit.type].strength, 0
+    );
 
-        // Evaluate all possible buildings
-        const buildingOptions = Object.entries(BUILDING_TYPES)
-            .filter(([buildingType, buildingDef]) => {
-                // Check if the AI has researched the required technology
-                if (buildingDef.requires && !aiPlayer.researchedTechs.has(buildingDef.requires)) {
-                    return false;
-                }
+    // Calculate military needs based on threats
+    const totalThreatStrength = threats.reduce((sum, threat) => 
+        sum + UNIT_TYPES[threat.unit.type].strength, 0
+    );
+    const militaryNeeded = totalThreatStrength > militaryStrength * 1.2; // Need 20% more strength than threats
 
-                // Check if the AI has enough gold
-                if (aiPlayer.gold < buildingDef.goldCost) {
-                    return false;
-                }
-
-                // Check if the building is a library and if one already exists near the city
-                if (buildingType === 'LIBRARY') {
-                    const hasLibrary = gameState.buildings.some(b =>
-                        b.type === 'LIBRARY' &&
-                        b.player === aiPlayer.id &&
-                        Math.abs(b.x - city.x) + Math.abs(b.y - city.y) <= 1
-                    );
-                    if (hasLibrary) {
-                        return false;
-                    }
-                }
-
-                return true;
-            });
-
-        // Prioritize buildings (e.g., libraries over granaries)
-        buildingOptions.sort(([typeA, defA], [typeB, defB]) => {
-            if (typeA === 'LIBRARY') return -1; // Libraries are prioritized
-            if (typeB === 'LIBRARY') return 1;
-            return defA.goldCost - defB.goldCost; // Otherwise, prioritize cheaper buildings
-        });
-
-        // Attempt to build the highest-priority building
-        for (const [buildingType, buildingDef] of buildingOptions) {
-            const directions = [
-                { dx: 0, dy: -1 }, { dx: 1, dy: 0 },
-                { dx: 0, dy: 1 }, { dx: -1, dy: 0 }
-            ].sort(() => Math.random() - 0.5); // Randomize direction order
-
-            for (const dir of directions) {
-                const nx = city.x + dir.dx;
-                const ny = city.y + dir.dy;
-
-                if (ny >= 0 && ny < gameState.map.length &&
-                    nx >= 0 && nx < gameState.map[0].length &&
-                    canBuildBuilding(aiPlayer, buildingType, nx, ny)) {
-                    
-                    if (buildBuilding(aiPlayer, buildingType, nx, ny)) {
-                        logMessage(`${aiPlayer.name} started building a ${buildingDef.name} near ${city.name}.`, aiPlayer.id);
-                        break;
-                    }
-                }
-            }
-        }
-    }
+    // Count current scouts
+    const scoutCount = aiPlayer.units.filter(unit => unit.type === 'SCOUT').length;
+    const needsScouts = scoutCount < 2 && aiPlayer.cities.length > 0; // Maintain at least 2 scouts
 
     // City production logic
     for (const city of aiPlayer.cities) {
         if (!city.currentProduction) {
             const options = [];
             
-            // Only consider settlers if we have positive food balance
-            if (expansionOpportunities.length > 0 && foodBalance > 2 && Math.random() > 0.5) {
+            // Consider scouts for exploration
+            if (needsScouts && foodBalance > 0) {
+                options.push('SCOUT');
+            }
+            
+            // Only consider settlers if we have positive food balance and few cities
+            if (expansionOpportunities.length > 0 && foodBalance > 2 && 
+                aiPlayer.cities.length < 3 && Math.random() > 0.5) {
                 options.push('SETTLER');
             }
 
-            // Military units based on threat level
-            const militaryNeeded = threats.length > 0 || isHostile(aiPlayer);
-            if (militaryNeeded) {
+            // Military units based on threat level and current military strength
+            if (militaryNeeded && foodBalance > 0) {
                 // Don't overproduce if we're already at food limit
-                if (foodBalance > 0 || aiPlayer.units.length < aiPlayer.cities.length * 3) {
-                    options.push('WARRIOR');
-                    if (aiPlayer.researchedTechs.has('ARCHERY')) options.push('ARCHER');
-                    if (aiPlayer.researchedTechs.has('BRONZE_WORKING')) options.push('SPEARMAN');
+                if (aiPlayer.units.length < aiPlayer.cities.length * 4) {
+                    // Add variety to military units
+                    const militaryOptions = [];
+                    if (aiPlayer.researchedTechs.has('ARCHERY')) militaryOptions.push('ARCHER');
+                    if (aiPlayer.researchedTechs.has('BRONZE_WORKING')) militaryOptions.push('SPEARMAN');
+                    if (aiPlayer.researchedTechs.has('IRON_WORKING')) militaryOptions.push('SWORDSMAN');
+                    if (aiPlayer.researchedTechs.has('HORSEBACK_RIDING')) militaryOptions.push('HORSEMAN');
+                    
+                    // Only add basic warrior if we have no other options
+                    if (militaryOptions.length === 0) {
+                        militaryOptions.push('WARRIOR');
+                    }
+                    
+                    // Randomly select one military unit type
+                    options.push(militaryOptions[Math.floor(Math.random() * militaryOptions.length)]);
                 }
             }
 
-            // Default to economic focus if no pressing needs
-            if (options.length === 0 && foodBalance < 1) {
-                // Check if the AI has researched Pottery and has enough gold for a Granary
-                if (aiPlayer.researchedTechs.has('POTTERY') && aiPlayer.gold >= BUILDING_TYPES.GRANARY.goldCost) {
-                    for (const city of aiPlayer.cities) {
-                        const directions = [
-                            { dx: 0, dy: -1 }, { dx: 1, dy: 0 },
-                            { dx: 0, dy: 1 }, { dx: -1, dy: 0 }
-                        ].sort(() => Math.random() - 0.5); // Randomize direction order
+            // Economic focus if no pressing military needs
+            if (options.length === 0) {
+                // Check if we need more food
+                if (foodBalance < 1) {
+                    // Check if the AI has researched Pottery and has enough gold for a Granary
+                    if (aiPlayer.researchedTechs.has('POTTERY') && aiPlayer.gold >= BUILDING_TYPES.GRANARY.goldCost) {
+                        for (const city of aiPlayer.cities) {
+                            const directions = [
+                                { dx: 0, dy: -1 }, { dx: 1, dy: 0 },
+                                { dx: 0, dy: 1 }, { dx: -1, dy: 0 }
+                            ].sort(() => Math.random() - 0.5);
 
-                        for (const dir of directions) {
-                            const nx = city.x + dir.dx;
-                            const ny = city.y + dir.dy;
+                            for (const dir of directions) {
+                                const nx = city.x + dir.dx;
+                                const ny = city.y + dir.dy;
 
-                            if (ny >= 0 && ny < gameState.map.length &&
-                                nx >= 0 && nx < gameState.map[0].length &&
-                                canBuildBuilding(aiPlayer, 'GRANARY', nx, ny)) {
-                                
-                                if (buildBuilding(aiPlayer, 'GRANARY', nx, ny)) {
-                                    logMessage(`${aiPlayer.name} started building a Granary near ${city.name}.`, aiPlayer.id);
-                                    break;
+                                if (ny >= 0 && ny < gameState.map.length &&
+                                    nx >= 0 && nx < gameState.map[0].length &&
+                                    canBuildBuilding(aiPlayer, 'GRANARY', nx, ny)) {
+                                    
+                                    if (buildBuilding(aiPlayer, 'GRANARY', nx, ny)) {
+                                        logMessage(`${aiPlayer.name} started building a Granary near ${city.name}.`, aiPlayer.id);
+                                        break;
+                                    }
                                 }
                             }
                         }
@@ -2250,9 +2217,32 @@ function aiTurn(aiPlayer) {
                 continue;
             }
 
-            // Fallback to warriors if nothing else (but limited by food)
-            if (options.length === 0 && aiPlayer.units.length < aiPlayer.cities.length * 4) {
-                options.push('WARRIOR');
+            // Fallback to economic units if nothing else
+            if (options.length === 0 && aiPlayer.units.length < aiPlayer.cities.length * 3) {
+                // Consider building a library if we don't have one
+                if (aiPlayer.researchedTechs.has('WRITING') && 
+                    !gameState.buildings.some(b => b.type === 'LIBRARY' && b.player === aiPlayer.id)) {
+                    // Try to build a library
+                    const directions = [
+                        { dx: 0, dy: -1 }, { dx: 1, dy: 0 },
+                        { dx: 0, dy: 1 }, { dx: -1, dy: 0 }
+                    ].sort(() => Math.random() - 0.5);
+
+                    for (const dir of directions) {
+                        const nx = city.x + dir.dx;
+                        const ny = city.y + dir.dy;
+
+                        if (ny >= 0 && ny < gameState.map.length &&
+                            nx >= 0 && nx < gameState.map[0].length &&
+                            canBuildBuilding(aiPlayer, 'LIBRARY', nx, ny)) {
+                            
+                            if (buildBuilding(aiPlayer, 'LIBRARY', nx, ny)) {
+                                logMessage(`${aiPlayer.name} started building a Library near ${city.name}.`, aiPlayer.id);
+                                break;
+                            }
+                        }
+                    }
+                }
             }
 
             if (options.length > 0) {
@@ -2267,6 +2257,8 @@ function aiTurn(aiPlayer) {
             }
         }
     }
+
+    // Rest of the AI turn logic remains the same...
 
     if (!aiPlayer.currentResearch) {
         const availableTechs = Object.keys(TECH_TREE).filter(techId =>
