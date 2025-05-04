@@ -1744,21 +1744,31 @@ function checkWinLossConditions() {
     
     // Check if current player has been eliminated
     if (currentPlayer.cities.length === 0) {
-        endGame(false);
-        return true;
+        // Only show game over screen for human player
+        if (currentPlayer.isHuman) {
+            endGame(false);
+            return true;
+        }
+        // For AI players, just mark them as eliminated
+        currentPlayer.eliminated = true;
+        return false;
     }
     
     // Check if current player has won by eliminating others
     const remainingPlayers = gameState.players.filter(player => {
         // Skip eliminated players and allies
-        if (player.cities.length === 0) return false;
+        if (player.cities.length === 0 || player.eliminated) return false;
         if (player.id === currentPlayer.id) return false;
         return currentPlayer.relations[player.id]?.attitude < 80; // Not allied
     });
     
     if (remainingPlayers.length === 0) {
-        endGame(true);
-        return true;
+        // Only show victory screen for human player
+        if (currentPlayer.isHuman) {
+            endGame(true);
+            return true;
+        }
+        return false;
     }
     
     return false;
@@ -1833,6 +1843,13 @@ function endTurn() {
         if (nextPlayerIndex !== 0) {
             gameState.currentPlayer = nextPlayerIndex;
             const nextPlayer = gameState.players[gameState.currentPlayer];
+
+            // Skip eliminated players
+            if (nextPlayer.eliminated) {
+                nextPlayerIndex = (gameState.currentPlayer + 1) % gameState.players.length;
+                setTimeout(processAITurns, 100);
+                return;
+            }
 
             if (!nextPlayer.isHuman) {
                 aiTurn(nextPlayer);
