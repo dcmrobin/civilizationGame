@@ -216,7 +216,16 @@ const gameState = {
     highlightedTiles: [],
     mapDirty: true,
     buildings: [], // Array to store all buildings in the game
-    buildingConstruction: null // Tracks current building being placed
+    buildingConstruction: null, // Tracks current building being placed
+    selectionBox: {
+        isSelecting: false,
+        startX: 0,
+        startY: 0,
+        endX: 0,
+        endY: 0
+    },
+    selectedUnits: new Set(),
+    mapContainer: null
 };
 
 let isPanning = false;
@@ -332,11 +341,16 @@ function initGame() {
 
     let isPanning = false;
     let startX, startY, scrollLeft, scrollTop;
+    let isSelecting = false;
+    let mouseDownTime = 0;
+    let mouseDownX = 0;
+    let mouseDownY = 0;
 
     const mapContainer = document.getElementById('map-container');
+    gameState.mapContainer = mapContainer;
 
     mapContainer.addEventListener('mousedown', (e) => {
-        if (e.button === 1) {
+        if (e.button === 1) { // Middle mouse button
             e.preventDefault();
             isPanning = true;
             mapContainer.classList.add('dragging');
@@ -344,21 +358,104 @@ function initGame() {
             startY = e.pageY - mapContainer.offsetTop;
             scrollLeft = mapContainer.scrollLeft;
             scrollTop = mapContainer.scrollTop;
+        } else if (e.button === 0) { // Left mouse button
+            const rect = mapContainer.getBoundingClientRect();
+            const x = Math.floor((e.clientX - rect.left + mapContainer.scrollLeft) / 20);
+            const y = Math.floor((e.clientY - rect.top + mapContainer.scrollTop) / 20);
+            
+            // Store initial click position and time for click vs drag detection
+            mouseDownTime = Date.now();
+            mouseDownX = e.clientX;
+            mouseDownY = e.clientY;
+            
+            // Start selection box
+            gameState.selectionBox.isSelecting = true;
+            gameState.selectionBox.startX = x;
+            gameState.selectionBox.startY = y;
+            gameState.selectionBox.endX = x;
+            gameState.selectionBox.endY = y;
+            
+            // Always clear previous selection when starting a new selection box
+            gameState.selectedUnits.clear();
+            gameState.selectedUnit = null;
+            gameState.selectedCity = null;
+            clearAttackRangeHighlights();
         }
     });
 
     mapContainer.addEventListener('mousemove', (e) => {
-        if (!isPanning) return;
-        e.preventDefault();
-        const x = e.pageX - mapContainer.offsetLeft;
-        const y = e.pageY - mapContainer.offsetTop;
-        const walkX = (x - startX) * 1;
-        const walkY = (y - startY) * 1;
-        mapContainer.scrollLeft = scrollLeft - walkX;
-        mapContainer.scrollTop = scrollTop - walkY;
+        if (gameState.selectionBox.isSelecting) {
+            const rect = mapContainer.getBoundingClientRect();
+            const x = Math.floor((e.clientX - rect.left + mapContainer.scrollLeft) / 20);
+            const y = Math.floor((e.clientY - rect.top + mapContainer.scrollTop) / 20);
+            
+            // Ensure coordinates are within map bounds
+            const maxX = gameState.map[0].length - 1;
+            const maxY = gameState.map.length - 1;
+            gameState.selectionBox.endX = Math.max(0, Math.min(x, maxX));
+            gameState.selectionBox.endY = Math.max(0, Math.min(y, maxY));
+            
+            // Update selection box visual
+            updateSelectionBox();
+        }
+        
+        if (isPanning) {
+            e.preventDefault();
+            const x = e.pageX - mapContainer.offsetLeft;
+            const y = e.pageY - mapContainer.offsetTop;
+            const walkX = (x - startX) * 1;
+            const walkY = (y - startY) * 1;
+            mapContainer.scrollLeft = scrollLeft - walkX;
+            mapContainer.scrollTop = scrollTop - walkY;
+        }
     });
 
-    mapContainer.addEventListener('mouseup', () => {
+    mapContainer.addEventListener('mouseup', (e) => {
+        if (e.button === 0) { // Left mouse button
+            if (gameState.selectionBox.isSelecting) {
+                const timeElapsed = Date.now() - mouseDownTime;
+                const distanceMoved = Math.sqrt(
+                    Math.pow(e.clientX - mouseDownX, 2) + 
+                    Math.pow(e.clientY - mouseDownY, 2)
+                );
+                
+                // If it was a quick click with minimal movement, treat it as a click
+                if (timeElapsed < 200 && distanceMoved < 5) {
+                    const rect = mapContainer.getBoundingClientRect();
+                    const x = Math.floor((e.clientX - rect.left + mapContainer.scrollLeft) / 20);
+                    const y = Math.floor((e.clientY - rect.top + mapContainer.scrollTop) / 20);
+                    handleTileClick(x, y);
+                } else {
+                    // Handle selection box
+                    const currentPlayer = gameState.players[gameState.currentPlayer];
+                    const minX = Math.min(gameState.selectionBox.startX, gameState.selectionBox.endX);
+                    const maxX = Math.max(gameState.selectionBox.startX, gameState.selectionBox.endX);
+                    const minY = Math.min(gameState.selectionBox.startY, gameState.selectionBox.endY);
+                    const maxY = Math.max(gameState.selectionBox.startY, gameState.selectionBox.endY);
+                    
+                    // Select units within the box
+                    for (const unit of currentPlayer.units) {
+                        if (unit.x >= minX && unit.x <= maxX && unit.y >= minY && unit.y <= maxY) {
+                            gameState.selectedUnits.add(unit.id);
+                        }
+                    }
+                    
+                    // Update the first selected unit as the primary selected unit
+                    if (gameState.selectedUnits.size > 0) {
+                        const firstSelectedUnit = currentPlayer.units.find(u => gameState.selectedUnits.has(u.id));
+                        if (firstSelectedUnit) {
+                            gameState.selectedUnit = firstSelectedUnit;
+                            highlightAttackRange(firstSelectedUnit);
+                        }
+                    }
+                }
+                
+                gameState.selectionBox.isSelecting = false;
+                clearSelectionBox();
+                gameState.mapDirty = true;
+                renderMap();
+            }
+        }
         isPanning = false;
         mapContainer.classList.remove('dragging');
     });
@@ -366,15 +463,20 @@ function initGame() {
     mapContainer.addEventListener('mouseleave', () => {
         isPanning = false;
         mapContainer.classList.remove('dragging');
+        if (gameState.selectionBox.isSelecting) {
+            gameState.selectionBox.isSelecting = false;
+            clearSelectionBox();
+        }
     });
 
     // Add throttled renderMap call on scroll
-    let renderTimeout = null;
+    let scrollTimeout;
     mapContainer.addEventListener('scroll', () => {
-        if (!renderTimeout) {
-            renderTimeout = setTimeout(() => {
+        if (!scrollTimeout) {
+            scrollTimeout = setTimeout(() => {
+                gameState.mapDirty = true;
                 renderMap();
-                renderTimeout = null;
+                scrollTimeout = null;
             }, 100);
         }
     });
@@ -714,6 +816,7 @@ function renderMap() {
                 cityElement.className = `city ${player.color}`;
                 cityElement.textContent = city.name.slice(0, 2);
                 cityElement.style.textShadow = '1px 1px 2px black';
+                cityElement.style.pointerEvents = 'none'; // Make the city element pass through click events
                 tileElement.appendChild(cityElement);
             }
         }
@@ -727,9 +830,14 @@ function renderMap() {
                 const unitElement = document.createElement('div');
                 unitElement.className = `unit ${player.color}`;
                 unitElement.textContent = unit.type.slice(0, 2);
-                if (unit.player === gameState.currentPlayer && unit.moves > 0) {
+                
+                // Add selection highlight
+                if (gameState.selectedUnits.has(unit.id)) {
+                    unitElement.style.boxShadow = '0 0 0 2px yellow';
+                } else if (unit.player === gameState.currentPlayer && unit.moves > 0) {
                     unitElement.style.boxShadow = '0 0 0 2px white';
                 }
+                
                 tileElement.appendChild(unitElement);
             }
         }
@@ -861,6 +969,7 @@ function handleTileClick(x, y) {
     if (city && city.player === currentPlayer.id) {
         gameState.selectedCity = city;
         gameState.selectedUnit = null;
+        gameState.selectedUnits.clear();
         clearAttackRangeHighlights();
         showCityPanel(city);
         return;
@@ -871,7 +980,7 @@ function handleTileClick(x, y) {
         // Prevent map shifting by focusing on the unit's tile
         const tileElement = document.querySelector(`.tile[data-x="${x}"][data-y="${y}"]`);
         if (tileElement) {
-            tileElement.focus({ preventScroll: true }); // Prevent auto-scrolling
+            tileElement.focus({ preventScroll: true });
         }
 
         if (unit.type === 'SETTLER') {
@@ -887,12 +996,21 @@ function handleTileClick(x, y) {
             }
         }
         
+        // Toggle unit selection
+        if (gameState.selectedUnits.has(unit.id)) {
+            gameState.selectedUnits.delete(unit.id);
+        } else {
+            gameState.selectedUnits.add(unit.id);
+        }
+        
         gameState.selectedUnit = unit;
         gameState.selectedCity = null;
         highlightAttackRange(unit);
     } else {
+        // Clear selection if clicking empty space
         gameState.selectedUnit = null;
         gameState.selectedCity = null;
+        gameState.selectedUnits.clear();
         clearAttackRangeHighlights();
     }
 
@@ -1098,30 +1216,14 @@ function resolveRangedCombat(attacker, target) {
         return; // Settlers can't attack
     }
 
-    if (attacker.hasAttacked) {
-        logMessage(`${attacker.type} has already attacked this turn.`, attacker.player);
-        return;
-    }
-
-    // Determine if target is a city, unit, or building
-    if (target.health !== undefined && !target.type) {
-        // Target is a city
+    if (target.health !== undefined) { // Target is a city
         const city = target;
         const cityPlayer = gameState.players[city.player];
-
-        // Calculate damage based on attacker strength with some randomness
-        const baseDamage = attackerType.strength;
-        const damageVariation = baseDamage * 0.2; // ±20% variation
-        const damage = Math.max(1, baseDamage + (Math.random() * damageVariation * 2 - damageVariation));
         
-        city.health -= Math.round(damage);
-
-        attackerPlayer.relations[cityPlayer.id].hasMet = true;
-        cityPlayer.relations[attackerPlayer.id].hasMet = true;
-
-        attackerPlayer.relations[cityPlayer.id].attitude = Math.max(0, attackerPlayer.relations[cityPlayer.id].attitude - 10);
-        cityPlayer.relations[attackerPlayer.id].attitude = Math.max(0, cityPlayer.relations[attackerPlayer.id].attitude - 10);
-
+        // Calculate damage based on attacker's strength
+        const damage = attackerType.strength * (0.8 + Math.random() * 0.4); // 80-120% of base strength
+        city.health -= damage;
+        
         logMessage(`${attackerPlayer.name}'s ${attacker.type} dealt ${Math.round(damage)} damage to ${city.name}.`, attacker.player, city.player);
 
         // Check if allies come to help
@@ -1153,7 +1255,7 @@ function resolveRangedCombat(attacker, target) {
         const attackerStrength = attackerType.strength * (0.8 + Math.random() * 0.4); // 80-120% of base strength
         
         // For ranged units, they don't take damage in return
-        if (attackerType.range > 1) {
+        if (attackerType.range) {
             // Ranged units always win against melee units
             defenderPlayer.units = defenderPlayer.units.filter(u => u !== defender);
             logMessage(`${attackerPlayer.name}'s ${attacker.type} defeated ${defenderPlayer.name}'s ${defender.type} from range.`, attacker.player, defender.player);
@@ -1197,22 +1299,11 @@ function resolveRangedCombat(attacker, target) {
 
         defenderPlayer.relations[attacker.player].attitude = Math.max(0, defenderPlayer.relations[attacker.player].attitude - 10);
         attackerPlayer.relations[defender.player].attitude = Math.max(0, attackerPlayer.relations[defender.player].attitude - 10);
-
-        // Check if allies come to help
-        for (const ally of gameState.players) {
-            if (ally.id !== defenderPlayer.id && ally.relations[defenderPlayer.id]?.attitude >= 80) {
-                if (ally.id !== attackerPlayer.id) {
-                    ally.relations[attacker.player] = ally.relations[attacker.player] || { attitude: 50, hasMet: true };
-                    ally.relations[attacker.player].attitude = Math.max(0, ally.relations[attacker.player].attitude - 40);
-
-                    logMessage(`${ally.name} has come to the aid of ${defenderPlayer.name} and is now hostile toward ${attackerPlayer.name}!`, ally.id, attacker.player);
-                }
-            }
-        }
     }
 
     attacker.hasAttacked = true;
     gameState.mapDirty = true;
+    renderMap();
 }
 
 function attackBuilding(attacker, building) {
@@ -2151,7 +2242,35 @@ function handleTileRightClick(x, y) {
         return;
     }
 
-    if (gameState.selectedUnit && gameState.selectedUnit.player === gameState.currentPlayer) {
+    const currentPlayer = gameState.players[gameState.currentPlayer];
+    
+    // Handle multiple unit movement
+    if (gameState.selectedUnits.size > 0) {
+        const selectedUnits = Array.from(gameState.selectedUnits)
+            .map(id => currentPlayer.units.find(u => u.id === id))
+            .filter(unit => unit && unit.moves > 0);
+            
+        if (selectedUnits.length > 0) {
+            // Find the closest valid path for each unit
+            for (const unit of selectedUnits) {
+                const path = findPath(unit.x, unit.y, x, y, unit);
+                if (path.length > 0) {
+                    gameState.unitDestinations[unit.id] = {
+                        targetX: x,
+                        targetY: y,
+                        path: path
+                    };
+
+                    if (unit.moves > 0) {
+                        const nextStep = path[0];
+                        if (canMoveTo(unit, nextStep.x, nextStep.y)) {
+                            moveUnit(unit, nextStep.x, nextStep.y);
+                        }
+                    }
+                }
+            }
+        }
+    } else if (gameState.selectedUnit && gameState.selectedUnit.player === gameState.currentPlayer) {
         const selectedUnit = gameState.selectedUnit;
         const unitType = UNIT_TYPES[selectedUnit.type];
 
@@ -2190,6 +2309,7 @@ function handleTileRightClick(x, y) {
             }
         }
     }
+    
     gameState.mapDirty = true;
     renderMap();
     updateUI();
@@ -3536,3 +3656,35 @@ function handleCombat(attacker, defender) {
 
 // Initialize the game when the page loads
 window.onload = initGame;
+
+// Add selection box visual functions
+function updateSelectionBox() {
+    const minX = Math.min(gameState.selectionBox.startX, gameState.selectionBox.endX);
+    const maxX = Math.max(gameState.selectionBox.startX, gameState.selectionBox.endX);
+    const minY = Math.min(gameState.selectionBox.startY, gameState.selectionBox.endY);
+    const maxY = Math.max(gameState.selectionBox.startY, gameState.selectionBox.endY);
+    
+    // Clear previous selection box
+    clearSelectionBox();
+    
+    // Create new selection box
+    const selectionBox = document.createElement('div');
+    selectionBox.className = 'selection-box';
+    selectionBox.style.position = 'absolute';
+    selectionBox.style.left = `${minX * 20}px`;
+    selectionBox.style.top = `${minY * 20}px`;
+    selectionBox.style.width = `${(maxX - minX + 1) * 20}px`;
+    selectionBox.style.height = `${(maxY - minY + 1) * 20}px`;
+    selectionBox.style.border = '2px solid yellow';
+    selectionBox.style.pointerEvents = 'none';
+    selectionBox.style.zIndex = '3';
+    
+    gameState.mapContainer.appendChild(selectionBox);
+}
+
+function clearSelectionBox() {
+    const existingBox = gameState.mapContainer.querySelector('.selection-box');
+    if (existingBox) {
+        existingBox.remove();
+    }
+}
