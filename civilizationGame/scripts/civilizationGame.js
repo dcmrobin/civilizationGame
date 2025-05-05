@@ -13,7 +13,6 @@ const TILE_TYPES = {
 const UNIT_TYPES = {
     SETTLER: { name: 'Settler', description: "Able to found cities", cost: 30, goldCost: 50, strength: 0, move: 1, production: ['CITY'], foodConsumption: 2 },
     SCOUT: { name: 'Scout', cost: 5, description: "Able to move quicker over harder terrain", goldCost: 10, strength: 5, move: 3, range: 1, production: ['CITY'], foodConsumption: 1 },
-    WORKER: { name: 'Worker', description: "Can build improvements and roads", cost: 15, goldCost: 40, strength: 0, move: 2, production: ['CITY'], requires: 'POTTERY', foodConsumption: 1 },
     WARRIOR: { name: 'Warrior', description: "Basic attack unit", cost: 10, goldCost: 30, strength: 20, move: 1, range: 1, production: ['CITY'], foodConsumption: 1 },
     ARCHER: { name: 'Archer', description: "Ranged attack unit", cost: 20, goldCost: 40, strength: 15, move: 1, range: 2, production: ['CITY'], requires: 'ARCHERY', foodConsumption: 1 },
     SPEARMAN: { name: 'Spearman', description: "Stronger attack unit", cost: 20, goldCost: 50, strength: 15, move: 2, range: 1, production: ['CITY'], requires: 'BRONZE_WORKING', foodConsumption: 1 },
@@ -81,7 +80,7 @@ const TECH_TREE = {
         name: 'Pottery', 
         cost: 50, 
         leadsTo: ['WRITING', 'BRONZE_WORKING', 'HORSEBACK_RIDING'], 
-        description: 'Allows Granary building and Worker units' 
+        description: 'Allows Granary building' 
     },
     
     // Tier 1
@@ -1182,15 +1181,25 @@ function processQueuedMoves() {
 
 function performRangedAttack(attacker, targetX, targetY) {
     const attackerType = UNIT_TYPES[attacker.type];
-    if (!attackerType.range) return;
+    
+    // For ranged units, check range
+    if (attackerType.range) {
+        const dx = Math.abs(attacker.x - targetX);
+        const dy = Math.abs(attacker.y - targetY);
 
-    const dx = Math.abs(attacker.x - targetX);
-    const dy = Math.abs(attacker.y - targetY);
-
-    // Ensure the target is within range and only orthogonal
-    if ((dx !== 0 && dy !== 0) || dx + dy > attackerType.range) {
-        logMessage(`${attacker.type} cannot attack target at (${targetX}, ${targetY}) because it is out of range or not orthogonal.`, attacker.player);
-        return;
+        // Ensure the target is within range and only orthogonal
+        if ((dx !== 0 && dy !== 0) || dx + dy > attackerType.range) {
+            logMessage(`${attacker.type} cannot attack target at (${targetX}, ${targetY}) because it is out of range or not orthogonal.`, attacker.player);
+            return;
+        }
+    } else {
+        // For melee units, check if adjacent
+        const dx = Math.abs(attacker.x - targetX);
+        const dy = Math.abs(attacker.y - targetY);
+        if (dx + dy !== 1) {
+            logMessage(`${attacker.type} must be adjacent to the target to attack.`, attacker.player);
+            return;
+        }
     }
 
     const targetUnit = findUnitAt(targetX, targetY);
@@ -2266,6 +2275,13 @@ function handleTileRightClick(x, y) {
                     const unitType = UNIT_TYPES[unit.type];
                     if (unitType.range) {
                         performRangedAttack(unit, x, y);
+                    } else {
+                        // For melee units, check if they're adjacent to the target
+                        const dx = Math.abs(unit.x - x);
+                        const dy = Math.abs(unit.y - y);
+                        if (dx + dy === 1) { // Adjacent
+                            performRangedAttack(unit, x, y); // Melee attack uses the same function
+                        }
                     }
                 }
                 gameState.mapDirty = true;
@@ -2308,9 +2324,18 @@ function handleTileRightClick(x, y) {
 
         if (isAttacking) {
             // If attacking, only perform the attack without setting movement destination
-            if (unitType.range && !selectedUnit.hasAttacked) {
-                performRangedAttack(selectedUnit, x, y);
-            } else if (selectedUnit.hasAttacked) {
+            if (!selectedUnit.hasAttacked) {
+                if (unitType.range) {
+                    performRangedAttack(selectedUnit, x, y);
+                } else {
+                    // For melee units, check if they're adjacent to the target
+                    const dx = Math.abs(selectedUnit.x - x);
+                    const dy = Math.abs(selectedUnit.y - y);
+                    if (dx + dy === 1) { // Adjacent
+                        performRangedAttack(selectedUnit, x, y); // Melee attack uses the same function
+                    }
+                }
+            } else {
                 logMessage(`${selectedUnit.type} has already attacked this turn.`, selectedUnit.player);
             }
             gameState.mapDirty = true;
@@ -2414,7 +2439,7 @@ function aiTurn(aiPlayer) {
 
     // Calculate military strength
     const militaryUnits = aiPlayer.units.filter(unit => 
-        unit.type !== 'SETTLER' && unit.type !== 'WORKER' && unit.type !== 'SCOUT'
+        unit.type !== 'SETTLER' && unit.type !== 'SCOUT'
     );
     const militaryStrength = militaryUnits.reduce((sum, unit) => 
         sum + UNIT_TYPES[unit.type].strength, 0
