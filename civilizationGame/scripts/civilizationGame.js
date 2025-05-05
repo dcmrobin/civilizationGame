@@ -1149,7 +1149,8 @@ function moveUnit(unit, x, y) {
 
     unit.x = x;
     unit.y = y;
-    unit.moves -= tile.moveCost;
+    //unit.moves -= tile.moveCost;
+    unit.moves -= unit.moves;
 
     gameState.mapDirty = true;
     renderMap();
