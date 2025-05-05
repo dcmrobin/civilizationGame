@@ -1255,7 +1255,7 @@ function resolveRangedCombat(attacker, target) {
         const attackerStrength = attackerType.strength * (0.8 + Math.random() * 0.4); // 80-120% of base strength
         
         // For ranged units, they don't take damage in return
-        if (attackerType.range) {
+        if (attackerType.range > 1) {
             // Ranged units always win against melee units
             defenderPlayer.units = defenderPlayer.units.filter(u => u !== defender);
             logMessage(`${attackerPlayer.name}'s ${attacker.type} defeated ${defenderPlayer.name}'s ${defender.type} from range.`, attacker.player, defender.player);
@@ -1265,8 +1265,8 @@ function resolveRangedCombat(attacker, target) {
             const totalStrength = attackerStrength + defenderStrength;
             const attackerWinChance = attackerStrength / totalStrength;
             
-            // 10% chance for underdog to win regardless of strength
-            const underdogBonus = (attackerStrength < defenderStrength && Math.random() < 0.1) ? 0.3 : 0;
+            // 5% chance for underdog to win regardless of strength (reduced from 10%)
+            const underdogBonus = (attackerStrength < defenderStrength && Math.random() < 0.05) ? 0.15 : 0;
             const finalWinChance = Math.min(0.9, Math.max(0.1, attackerWinChance + underdogBonus));
 
             if (Math.random() < finalWinChance) {
@@ -2248,10 +2248,33 @@ function handleTileRightClick(x, y) {
     if (gameState.selectedUnits.size > 0) {
         const selectedUnits = Array.from(gameState.selectedUnits)
             .map(id => currentPlayer.units.find(u => u.id === id))
-            .filter(unit => unit && unit.moves > 0);
+            .filter(unit => unit && unit.moves > 0 && !unit.hasAttacked); // Only include units that haven't attacked
             
         if (selectedUnits.length > 0) {
-            // Find the closest valid path for each unit
+            // Check if we're trying to attack something
+            const targetUnit = findUnitAt(x, y);
+            const targetCity = findCityAt(x, y);
+            const targetBuilding = findBuildingAt(x, y);
+            
+            const isAttacking = (targetUnit && targetUnit.player !== currentPlayer.id) || 
+                              (targetCity && targetCity.player !== currentPlayer.id) ||
+                              (targetBuilding && targetBuilding.player !== currentPlayer.id);
+            
+            if (isAttacking) {
+                // If attacking, only perform the attack without setting movement destinations
+                for (const unit of selectedUnits) {
+                    const unitType = UNIT_TYPES[unit.type];
+                    if (unitType.range) {
+                        performRangedAttack(unit, x, y);
+                    }
+                }
+                gameState.mapDirty = true;
+                renderMap();
+                updateUI();
+                return;
+            }
+            
+            // If not attacking, proceed with normal movement
             for (const unit of selectedUnits) {
                 const path = findPath(unit.x, unit.y, x, y, unit);
                 if (path.length > 0) {
@@ -2270,26 +2293,33 @@ function handleTileRightClick(x, y) {
                 }
             }
         }
-    } else if (gameState.selectedUnit && gameState.selectedUnit.player === gameState.currentPlayer) {
+    } else if (gameState.selectedUnit) {
         const selectedUnit = gameState.selectedUnit;
         const unitType = UNIT_TYPES[selectedUnit.type];
 
-        if (unitType.range) {
-            const targetUnit = findUnitAt(x, y);
-            const targetCity = findCityAt(x, y);
-            const targetBuilding = findBuildingAt(x, y);
+        // Check if we're trying to attack something
+        const targetUnit = findUnitAt(x, y);
+        const targetCity = findCityAt(x, y);
+        const targetBuilding = findBuildingAt(x, y);
+        
+        const isAttacking = (targetUnit && targetUnit.player !== selectedUnit.player) || 
+                          (targetCity && targetCity.player !== selectedUnit.player) ||
+                          (targetBuilding && targetBuilding.player !== selectedUnit.player);
 
-            if ((targetUnit && targetUnit.player !== selectedUnit.player) || 
-                (targetCity && targetCity.player !== selectedUnit.player) ||
-                (targetBuilding && targetBuilding.player !== selectedUnit.player)) {
+        if (isAttacking) {
+            // If attacking, only perform the attack without setting movement destination
+            if (unitType.range && !selectedUnit.hasAttacked) {
                 performRangedAttack(selectedUnit, x, y);
-                gameState.mapDirty = true;
-                renderMap();
-                updateUI();
-                return;
+            } else if (selectedUnit.hasAttacked) {
+                logMessage(`${selectedUnit.type} has already attacked this turn.`, selectedUnit.player);
             }
+            gameState.mapDirty = true;
+            renderMap();
+            updateUI();
+            return;
         }
 
+        // If not attacking, proceed with normal movement
         const path = findPath(selectedUnit.x, selectedUnit.y, x, y, selectedUnit);
         if (path.length > 0) {
             // Clear any remaining highlights
