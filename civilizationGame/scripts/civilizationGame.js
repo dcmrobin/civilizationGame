@@ -3175,6 +3175,12 @@ function showTechTree() {
     const techDepths = {};
     const techPositions = {};
     
+    // Store tech connections for hover effects
+    const techConnections = {
+        prerequisites: {},
+        leadsTo: {}
+    };
+    
     // First pass: find all root technologies (no prerequisites)
     const rootTechs = [];
     for (const techId in TECH_TREE) {
@@ -3182,12 +3188,22 @@ function showTechTree() {
         for (const otherTechId in TECH_TREE) {
             if (TECH_TREE[otherTechId].leadsTo && TECH_TREE[otherTechId].leadsTo.includes(techId)) {
                 isRoot = false;
-                break;
+                if (!techConnections.prerequisites[techId]) {
+                    techConnections.prerequisites[techId] = [];
+                }
+                techConnections.prerequisites[techId].push(otherTechId);
             }
         }
         if (isRoot) {
             rootTechs.push(techId);
             techDepths[techId] = 0;
+        }
+    }
+    
+    // Store leadsTo connections
+    for (const techId in TECH_TREE) {
+        if (TECH_TREE[techId].leadsTo) {
+            techConnections.leadsTo[techId] = TECH_TREE[techId].leadsTo;
         }
     }
     
@@ -3221,6 +3237,29 @@ function showTechTree() {
     // Find maximum depth to properly space the tree
     const maxDepth = Math.max(...Object.values(techDepths));
     
+    // Calculate horizontal positions for each tech to prevent overlap
+    const techHorizontalPositions = {};
+    const levelWidths = {};
+    
+    // First pass: calculate minimum widths needed for each level
+    for (let depth = 0; depth <= maxDepth; depth++) {
+        if (!techLevels[depth]) continue;
+        const techsInLevel = techLevels[depth];
+        levelWidths[depth] = techsInLevel.length * 160; // 160px per tech (120px width + 40px margin)
+    }
+    
+    // Second pass: assign horizontal positions
+    for (let depth = 0; depth <= maxDepth; depth++) {
+        if (!techLevels[depth]) continue;
+        const techsInLevel = techLevels[depth];
+        const levelWidth = levelWidths[depth];
+        const startX = -levelWidth / 2;
+        
+        techsInLevel.forEach((techId, index) => {
+            techHorizontalPositions[techId] = startX + index * 160;
+        });
+    }
+    
     // Render the tree level by level
     for (let depth = 0; depth <= maxDepth; depth++) {
         if (!techLevels[depth]) continue;
@@ -3242,12 +3281,13 @@ function showTechTree() {
             const techElement = document.createElement('div');
             techElement.className = 'tech-node';
             techElement.dataset.techId = techId;
+            techElement.style.left = `${techHorizontalPositions[techId]}px`;
             
             if (currentPlayer.researchedTechs.has(techId)) {
                 techElement.classList.add('researched');
             } else if (canResearchTech(currentPlayer, techId)) {
                 techElement.classList.add('available');
-                if (!isResearching) {  // Only make clickable if not already researching
+                if (!isResearching) {
                     techElement.addEventListener('click', () => selectTech(techId));
                 } else {
                     techElement.classList.add('disabled-click');
@@ -3256,16 +3296,44 @@ function showTechTree() {
                 techElement.classList.add('unavailable');
             }
             
+            // Add hover event listeners
+            techElement.addEventListener('mouseenter', () => {
+                // Highlight this node
+                techElement.classList.add('highlighted');
+                
+                // Highlight prerequisites
+                if (techConnections.prerequisites[techId]) {
+                    techConnections.prerequisites[techId].forEach(prereqId => {
+                        const prereqNode = container.querySelector(`[data-tech-id="${prereqId}"]`);
+                        if (prereqNode) {
+                            prereqNode.classList.add('highlighted-prerequisite');
+                        }
+                    });
+                }
+                
+                // Highlight technologies this leads to
+                if (techConnections.leadsTo[techId]) {
+                    techConnections.leadsTo[techId].forEach(leadToId => {
+                        const leadToNode = container.querySelector(`[data-tech-id="${leadToId}"]`);
+                        if (leadToNode) {
+                            leadToNode.classList.add('highlighted-leads-to');
+                        }
+                    });
+                }
+            });
+            
+            techElement.addEventListener('mouseleave', () => {
+                // Remove all highlight classes
+                container.querySelectorAll('.tech-node').forEach(node => {
+                    node.classList.remove('highlighted', 'highlighted-prerequisite', 'highlighted-leads-to');
+                });
+            });
+            
             techElement.innerHTML = `
                 <div class="tech-name">${tech.name}</div>
                 <div class="tech-cost">${tech.cost} research</div>
                 <div class="tech-desc">${tech.description}</div>
             `;
-            
-            // Add vertical connector if not the last level
-            if (depth < maxDepth) {
-                techElement.innerHTML += '<div class="tech-connector-down"></div>';
-            }
             
             levelDiv.appendChild(techElement);
         }
@@ -3282,7 +3350,7 @@ function showTechTree() {
             const containerRect = container.getBoundingClientRect();
             techPositions[node.dataset.techId] = {
                 x: rect.left - containerRect.left + rect.width / 2,
-                y: rect.top - containerRect.top + rect.height,
+                y: rect.top - containerRect.top + rect.height / 2,
                 width: rect.width,
                 height: rect.height
             };
@@ -3298,9 +3366,6 @@ function showTechTree() {
                     const toPos = techPositions[childTechId];
                     
                     if (fromPos && toPos) {
-                        // Calculate midpoint between the two technologies
-                        const midX = (fromPos.x + toPos.x) / 2;
-                        
                         // Create vertical connector from parent down
                         const verticalConnector = document.createElement('div');
                         verticalConnector.className = 'tech-connector-path tech-connector-vertical';

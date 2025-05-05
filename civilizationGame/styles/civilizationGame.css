@@ -195,7 +195,10 @@ button {
     min-height: 100%;
     padding: 20px;
     transform-origin: 0 0;
-    will-change: transform; /* Improves performance */
+    will-change: transform;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
 }
 
 .tech-tree-viewport {
@@ -255,20 +258,22 @@ button {
     justify-content: center;
     margin-bottom: 60px;
     position: relative;
+    min-height: 100px;
 }
 
 .tech-node {
-    position: relative;
+    position: absolute;
     padding: 10px;
     margin: 0 20px;
     border-radius: 5px;
     text-align: center;
-    width: 120px;
+    width: 100px;
     cursor: pointer;
     z-index: 2;
-    background-color: #f8f9fa; /* Default/unavailable color */
+    background-color: #f8f9fa;
     border: 2px solid #6c757d;
     transition: all 0.2s ease;
+    transform: translateX(-50%);
 }
 
 .tech-node.researched {
@@ -304,21 +309,6 @@ button {
 
 .tech-node.available {
     cursor: pointer;
-}
-
-/* Add a pulsing animation for available tech */
-@keyframes pulse {
-    0% { transform: scale(1); }
-    50% { transform: scale(1.03); }
-    100% { transform: scale(1); }
-}
-
-.tech-node.available {
-    animation: pulse 2s infinite;
-}
-
-.tech-node.available:hover {
-    animation: none; /* Stop pulse on hover */
 }
 
 .tech-node.available {
@@ -363,18 +353,47 @@ button {
     color: #495057; /* Slightly darker gray for description */
 }
 
+.tech-node.highlighted {
+    border-color: #007bff;
+    box-shadow: 0 0 10px rgba(0, 123, 255, 0.5);
+    z-index: 3;
+}
+
+.tech-node.highlighted-prerequisite {
+    border-color: #28a745;
+    box-shadow: 0 0 10px rgba(40, 167, 69, 0.5);
+    z-index: 3;
+}
+
+.tech-node.highlighted-leads-to {
+    border-color: #ffc107;
+    box-shadow: 0 0 10px rgba(255, 193, 7, 0.5);
+    z-index: 3;
+}
+
 .tech-connector-path {
     position: absolute;
     background-color: #6c757d;
     z-index: 1;
+    pointer-events: none;
+    transition: all 0.2s ease;
+}
+
+.tech-node.highlighted ~ .tech-connector-path,
+.tech-node.highlighted-prerequisite ~ .tech-connector-path,
+.tech-node.highlighted-leads-to ~ .tech-connector-path {
+    background-color: #007bff;
+    z-index: 2;
 }
 
 .tech-connector-horizontal {
     height: 2px;
+    transform: translateY(-50%);
 }
 
 .tech-connector-vertical {
     width: 2px;
+    transform: translateX(-50%);
 }
 #help-panel {
     width: 800px;
