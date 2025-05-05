@@ -3673,42 +3673,6 @@ function calculateUnitStrength(unit) {
     return baseStrength;
 }
 
-function handleCombat(attacker, defender) {
-    const attackerType = attacker.type;
-    const defenderType = defender.type;
-    const attackerPlayer = gameState.players[attacker.player];
-    const defenderPlayer = gameState.players[defender.player];
-
-    if (attackerType === 'SETTLER') {
-        return; // Settlers can't attack
-    }
-
-    // Calculate combat strength with technology bonuses
-    const attackerStrength = calculateUnitStrength(attacker);
-    const defenderStrength = calculateUnitStrength(defender);
-
-    // Calculate damage
-    const totalStrength = attackerStrength + defenderStrength;
-    const attackerDamage = Math.floor((defenderStrength / totalStrength) * 100);
-    const defenderDamage = Math.floor((attackerStrength / totalStrength) * 100);
-
-    // Apply damage
-    attacker.health = Math.max(0, attacker.health - attackerDamage);
-    defender.health = Math.max(0, defender.health - defenderDamage);
-
-    // Handle unit death
-    if (attacker.health <= 0) {
-        attackerPlayer.units = attackerPlayer.units.filter(u => u !== attacker);
-        logMessage(`${attackerPlayer.name}'s ${attackerType} was defeated!`, attackerPlayer.id);
-    }
-    if (defender.health <= 0) {
-        defenderPlayer.units = defenderPlayer.units.filter(u => u !== defender);
-        logMessage(`${defenderPlayer.name}'s ${defenderType} was defeated!`, defenderPlayer.id);
-    }
-
-    attacker.hasAttacked = true;
-}
-
 // Initialize the game when the page loads
 window.onload = initGame;
 
