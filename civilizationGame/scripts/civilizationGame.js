@@ -378,7 +378,7 @@ function initGame() {
             gameState.selectedUnits.clear();
             gameState.selectedUnit = null;
             gameState.selectedCity = null;
-            clearAttackRangeHighlights();
+            //clearAttackRangeHighlights();
         }
     });
 
