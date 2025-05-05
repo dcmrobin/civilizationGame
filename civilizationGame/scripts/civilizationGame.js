@@ -1225,7 +1225,7 @@ function resolveRangedCombat(attacker, target) {
         return; // Settlers can't attack
     }
 
-    if (target.health !== undefined) { // Target is a city
+    if (target.health !== undefined && !target.type) { // Target is a city
         const city = target;
         const cityPlayer = gameState.players[city.player];
         
@@ -1251,6 +1251,11 @@ function resolveRangedCombat(attacker, target) {
             logMessage(`${city.name} has been defeated!`, attacker.player, city.player);
             captureOrDestroyCity(attackerPlayer, cityPlayer, city);
         }
+        
+        attacker.hasAttacked = true;
+        gameState.mapDirty = true;
+        renderMap();
+        return;
     } else if (target.type && BUILDING_TYPES[target.type]) {
         // Target is a building
         attackBuilding(attacker, target);
@@ -1262,6 +1267,7 @@ function resolveRangedCombat(attacker, target) {
 
         // Calculate combat odds based on strength ratio with some randomness
         const attackerStrength = attackerType.strength * (0.8 + Math.random() * 0.4); // 80-120% of base strength
+        const defenderStrength = defenderType.strength * (0.8 + Math.random() * 0.4); // 80-120% of base strength
         
         // For ranged units, they don't take damage in return
         if (attackerType.range > 1) {
@@ -1269,50 +1275,20 @@ function resolveRangedCombat(attacker, target) {
             defenderPlayer.units = defenderPlayer.units.filter(u => u !== defender);
             logMessage(`${attackerPlayer.name}'s ${attacker.type} defeated ${defenderPlayer.name}'s ${defender.type} from range.`, attacker.player, defender.player);
         } else {
-            // Melee combat - both units can take damage
-            const defenderStrength = defenderType.strength * (0.8 + Math.random() * 0.4); // 80-120% of base strength
-            const totalStrength = attackerStrength + defenderStrength;
-            const attackerWinChance = attackerStrength / totalStrength;
-            
-            // 5% chance for underdog to win regardless of strength (reduced from 10%)
-            const underdogBonus = (attackerStrength < defenderStrength && Math.random() < 0.05) ? 0.15 : 0;
-            const finalWinChance = Math.min(0.9, Math.max(0.1, attackerWinChance + underdogBonus));
-
-            if (Math.random() < finalWinChance) {
-                // Attacker wins
+            // Melee combat
+            if (attackerStrength > defenderStrength) {
                 defenderPlayer.units = defenderPlayer.units.filter(u => u !== defender);
-
-                // Calculate damage to attacker (20-40% of defender's strength)
-                const damageToAttacker = Math.round(defenderStrength * (0.2 + Math.random() * 0.2));
-                if (damageToAttacker > 0) {
-                    logMessage(`${attackerPlayer.name}'s ${attacker.type} defeated ${defenderPlayer.name}'s ${defender.type} but took ${damageToAttacker} damage.`, attacker.player, defender.player);
-                } else {
-                    logMessage(`${attackerPlayer.name}'s ${attacker.type} defeated ${defenderPlayer.name}'s ${defender.type}.`, attacker.player, defender.player);
-                }
+                logMessage(`${attackerPlayer.name}'s ${attacker.type} defeated ${defenderPlayer.name}'s ${defender.type} but took damage.`, attacker.player, defender.player);
             } else {
-                // Defender wins
                 attackerPlayer.units = attackerPlayer.units.filter(u => u !== attacker);
-
-                // Calculate damage to defender (20-40% of attacker's strength)
-                const damageToDefender = Math.round(attackerStrength * (0.2 + Math.random() * 0.2));
-                if (damageToDefender > 0) {
-                    logMessage(`${defenderPlayer.name}'s ${defender.type} defeated ${attackerPlayer.name}'s ${attacker.type} but took ${damageToDefender} damage.`, defender.player, attacker.player);
-                } else {
-                    logMessage(`${defenderPlayer.name}'s ${defender.type} defeated ${attackerPlayer.name}'s ${attacker.type}.`, defender.player, attacker.player);
-                }
+                logMessage(`${defenderPlayer.name}'s ${defender.type} defeated ${attackerPlayer.name}'s ${attacker.type} but took damage.`, defender.player, attacker.player);
             }
         }
-
-        attackerPlayer.relations[defender.player].hasMet = true;
-        defenderPlayer.relations[attacker.player].hasMet = true;
-
-        defenderPlayer.relations[attacker.player].attitude = Math.max(0, defenderPlayer.relations[attacker.player].attitude - 10);
-        attackerPlayer.relations[defender.player].attitude = Math.max(0, attackerPlayer.relations[defender.player].attitude - 10);
+        
+        attacker.hasAttacked = true;
+        gameState.mapDirty = true;
+        renderMap();
     }
-
-    attacker.hasAttacked = true;
-    gameState.mapDirty = true;
-    renderMap();
 }
 
 function attackBuilding(attacker, building) {
@@ -1341,6 +1317,12 @@ function attackBuilding(attacker, building) {
         destroyBuilding(building);
         logMessage(`${attackerPlayer.name} has destroyed the ${buildingDef.name}!`, attacker.player, building.player);
     }
+
+    attackerPlayer.relations[defender.player].hasMet = true;
+    defenderPlayer.relations[attacker.player].hasMet = true;
+
+    defenderPlayer.relations[attacker.player].attitude = Math.max(0, defenderPlayer.relations[attacker.player].attitude - 10);
+    attackerPlayer.relations[defender.player].attitude = Math.max(0, attackerPlayer.relations[defender.player].attitude - 10);
 
     attacker.hasAttacked = true;
     gameState.mapDirty = true;
