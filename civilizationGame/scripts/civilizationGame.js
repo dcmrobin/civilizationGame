@@ -1229,6 +1229,13 @@ function resolveRangedCombat(attacker, target) {
         const city = target;
         const cityPlayer = gameState.players[city.player];
         
+        // Set hasMet and update attitudes
+        attackerPlayer.relations[cityPlayer.id].hasMet = true;
+        cityPlayer.relations[attackerPlayer.id].hasMet = true;
+        
+        cityPlayer.relations[attackerPlayer.id].attitude = Math.max(0, cityPlayer.relations[attackerPlayer.id].attitude - 10);
+        attackerPlayer.relations[cityPlayer.id].attitude = Math.max(0, attackerPlayer.relations[cityPlayer.id].attitude - 10);
+        
         // Calculate damage based on attacker's strength
         const damage = attackerType.strength * (0.8 + Math.random() * 0.4); // 80-120% of base strength
         city.health -= damage;
