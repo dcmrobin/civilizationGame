@@ -11,21 +11,21 @@ const TILE_TYPES = {
 };
 
 const UNIT_TYPES = {
-    SETTLER: { name: 'Settler', description: "Able to found cities", cost: 30, goldCost: 50, strength: 0, move: 1, production: ['CITY'], foodConsumption: 2, health: 20 },
-    SCOUT: { name: 'Scout', cost: 5, description: "Able to move quicker over harder terrain", goldCost: 10, strength: 5, move: 3, range: 1, production: ['CITY'], foodConsumption: 1, health: 15 },
-    WARRIOR: { name: 'Warrior', description: "Basic attack unit", cost: 10, goldCost: 30, strength: 20, move: 1, range: 1, production: ['CITY'], foodConsumption: 1, health: 30 },
-    ARCHER: { name: 'Archer', description: "Ranged attack unit", cost: 20, goldCost: 40, strength: 15, move: 1, range: 2, production: ['CITY'], requires: 'ARCHERY', foodConsumption: 1, health: 20 },
-    SPEARMAN: { name: 'Spearman', description: "Stronger attack unit", cost: 20, goldCost: 50, strength: 15, move: 2, range: 1, production: ['CITY'], requires: 'BRONZE_WORKING', foodConsumption: 1, health: 25 },
-    GALLEY: { name: 'Galley', description: "Basic naval unit for exploration and combat", cost: 30, goldCost: 120, strength: 10, move: 3, production: ['PORT'], requires: 'SEAFARING', naval: true, foodConsumption: 3, health: 25 },
-    SWORDSMAN: { name: 'Swordsman', description: "Powerful melee unit with iron weapons", cost: 35, goldCost: 80, strength: 30, move: 1, range: 1, production: ['CITY'], requires: 'IRON_WORKING', foodConsumption: 2, health: 40 },
-    CATAPULT: { name: 'Catapult', description: "Siege weapon with long range but vulnerable up close", cost: 40, goldCost: 100, strength: 25, move: 1, range: 3, production: ['CITY'], requires: 'MATHEMATICS', foodConsumption: 3, health: 20 },
-    HORSEMAN: { name: 'Horseman', description: "Fast cavalry unit with high mobility", cost: 30, goldCost: 90, strength: 25, move: 3, range: 1, production: ['CITY'], requires: 'HORSEBACK_RIDING', foodConsumption: 2, health: 35 },
-    TRIREME: { name: 'Trireme', description: "Stronger naval unit for coastal warfare", cost: 40, goldCost: 150, strength: 25, move: 3, production: ['PORT'], requires: 'NAVAL_WARFARE', naval: true, foodConsumption: 4, health: 35 },
-    CROSSBOWMAN: { name: 'Crossbowman', description: "Advanced ranged unit with armor penetration", cost: 45, goldCost: 120, strength: 35, move: 1, range: 2, production: ['CITY'], requires: 'MACHINERY', foodConsumption: 2, health: 30 },
-    KNIGHT: { name: 'Knight', description: "Heavy cavalry with strong attack and defense", cost: 50, goldCost: 150, strength: 40, move: 2, range: 1, production: ['CITY'], requires: 'CHIVALRY', foodConsumption: 3, health: 50 },
-    CANNON: { name: 'Cannon', description: "Powerful siege weapon with area damage", cost: 60, goldCost: 180, strength: 45, move: 1, range: 3, production: ['CITY'], requires: 'GUNPOWDER', foodConsumption: 4, health: 30 },
-    FRIGATE: { name: 'Frigate', description: "Advanced naval unit with ranged attacks", cost: 70, goldCost: 200, strength: 50, move: 4, range: 2, production: ['PORT'], requires: 'NAVIGATION', naval: true, foodConsumption: 5, health: 45 },
-    MUSKETEER: { name: 'Musketeer', description: "Early gunpowder infantry unit", cost: 55, goldCost: 160, strength: 45, move: 1, range: 2, production: ['CITY'], requires: 'GUNPOWDER', foodConsumption: 3, health: 40 }
+    SETTLER: { name: 'Settler', description: "Able to found cities", cost: 30, goldCost: 50, strength: 0, move: 1, production: ['CITY'], foodConsumption: 2, health: 20, armor: 0 },
+    SCOUT: { name: 'Scout', cost: 5, description: "Able to move quicker over harder terrain", goldCost: 10, strength: 5, move: 3, range: 1, production: ['CITY'], foodConsumption: 1, health: 15, armor: 0 },
+    WARRIOR: { name: 'Warrior', description: "Basic attack unit", cost: 10, goldCost: 30, strength: 20, move: 1, range: 1, production: ['CITY'], foodConsumption: 1, health: 30, armor: 10 },
+    ARCHER: { name: 'Archer', description: "Ranged attack unit", cost: 20, goldCost: 40, strength: 15, move: 1, range: 2, production: ['CITY'], requires: 'ARCHERY', foodConsumption: 1, health: 20, armor: 5 },
+    SPEARMAN: { name: 'Spearman', description: "Stronger attack unit", cost: 20, goldCost: 50, strength: 15, move: 2, range: 1, production: ['CITY'], requires: 'BRONZE_WORKING', foodConsumption: 1, health: 25, armor: 15 },
+    GALLEY: { name: 'Galley', description: "Basic naval unit for exploration and combat", cost: 30, goldCost: 120, strength: 10, move: 3, production: ['PORT'], requires: 'SEAFARING', naval: true, foodConsumption: 3, health: 25, armor: 5 },
+    SWORDSMAN: { name: 'Swordsman', description: "Powerful melee unit with iron weapons", cost: 35, goldCost: 80, strength: 30, move: 1, range: 1, production: ['CITY'], requires: 'IRON_WORKING', foodConsumption: 2, health: 40, armor: 20 },
+    CATAPULT: { name: 'Catapult', description: "Siege weapon with long range but vulnerable up close", cost: 40, goldCost: 100, strength: 25, move: 1, range: 3, production: ['CITY'], requires: 'MATHEMATICS', foodConsumption: 3, health: 20, armor: 0 },
+    HORSEMAN: { name: 'Horseman', description: "Fast cavalry unit with high mobility", cost: 30, goldCost: 90, strength: 25, move: 3, range: 1, production: ['CITY'], requires: 'HORSEBACK_RIDING', foodConsumption: 2, health: 35, armor: 15 },
+    TRIREME: { name: 'Trireme', description: "Stronger naval unit for coastal warfare", cost: 40, goldCost: 150, strength: 25, move: 3, production: ['PORT'], requires: 'NAVAL_WARFARE', naval: true, foodConsumption: 4, health: 35, armor: 10 },
+    CROSSBOWMAN: { name: 'Crossbowman', description: "Advanced ranged unit with armor penetration", cost: 45, goldCost: 120, strength: 35, move: 1, range: 2, production: ['CITY'], requires: 'MACHINERY', foodConsumption: 2, health: 30, armor: 10, armorPiercing: true },
+    KNIGHT: { name: 'Knight', description: "Heavy cavalry with strong attack and defense", cost: 50, goldCost: 150, strength: 40, move: 2, range: 1, production: ['CITY'], requires: 'CHIVALRY', foodConsumption: 3, health: 50, armor: 30 },
+    CANNON: { name: 'Cannon', description: "Powerful siege weapon with area damage", cost: 60, goldCost: 180, strength: 45, move: 1, range: 3, production: ['CITY'], requires: 'GUNPOWDER', foodConsumption: 4, health: 30, armor: 0, armorPiercing: true },
+    FRIGATE: { name: 'Frigate', description: "Advanced naval unit with ranged attacks", cost: 70, goldCost: 200, strength: 50, move: 4, range: 2, production: ['PORT'], requires: 'NAVIGATION', naval: true, foodConsumption: 5, health: 45, armor: 15, armorPiercing: true },
+    MUSKETEER: { name: 'Musketeer', description: "Early gunpowder infantry unit", cost: 55, goldCost: 160, strength: 45, move: 1, range: 2, production: ['CITY'], requires: 'GUNPOWDER', foodConsumption: 3, health: 40, armor: 10, armorPiercing: true }
 };
 
 // Building types
@@ -1273,6 +1273,24 @@ function performRangedAttack(attacker, targetX, targetY) {
     }
 }
 
+// Add this function to calculate damage with armor
+function calculateDamage(attacker, defender, baseDamage) {
+    const attackerType = UNIT_TYPES[attacker.type];
+    const defenderType = UNIT_TYPES[defender.type];
+    
+    // If the attacker has armor piercing, ignore armor
+    if (attackerType.armorPiercing) {
+        return baseDamage;
+    }
+    
+    // Calculate damage reduction from armor (each point of armor reduces damage by 5%)
+    const damageReduction = Math.min(0.75, defenderType.armor * 0.05); // Cap at 75% reduction
+    const finalDamage = baseDamage * (1 - damageReduction);
+    
+    return Math.round(finalDamage);
+}
+
+// Modify the resolveRangedCombat function to use the new damage calculation
 function resolveRangedCombat(attacker, target) {
     const attackerType = UNIT_TYPES[attacker.type];
     const attackerPlayer = gameState.players[attacker.player];
@@ -1328,15 +1346,19 @@ function resolveRangedCombat(attacker, target) {
         const defenderType = UNIT_TYPES[defender.type];
         const defenderPlayer = gameState.players[defender.player];
 
-        // Calculate combat odds based on strength ratio with some randomness
+        // Calculate base damage with randomness
         const attackerStrength = attackerType.strength * (0.8 + Math.random() * 0.4); // 80-120% of base strength
         const defenderStrength = defenderType.strength * (0.8 + Math.random() * 0.4); // 80-120% of base strength
         
         // For ranged units, they don't take damage in return
         if (attackerType.range > 1) {
-            // Deal damage to defender
-            defender.health -= attackerStrength;
-            logMessage(`${attackerPlayer.name}'s ${attacker.type} dealt ${Math.round(attackerStrength)} damage to ${defenderPlayer.name}'s ${defender.type}.`, attacker.player, defender.player);
+            // Calculate damage with armor
+            const damage = calculateDamage(attacker, defender, attackerStrength);
+            defender.health -= damage;
+            
+            // Add armor piercing message if applicable
+            const armorMessage = attackerType.armorPiercing ? " (armor piercing)" : "";
+            logMessage(`${attackerPlayer.name}'s ${attacker.type} dealt ${Math.round(damage)} damage${armorMessage} to ${defenderPlayer.name}'s ${defender.type}.`, attacker.player, defender.player);
             
             // Check if defender is defeated
             if (defender.health <= 0) {
@@ -1345,11 +1367,18 @@ function resolveRangedCombat(attacker, target) {
             }
         } else {
             // Melee combat - both units take damage
-            defender.health -= attackerStrength;
-            attacker.health -= defenderStrength;
+            const attackerDamage = calculateDamage(defender, attacker, defenderStrength);
+            const defenderDamage = calculateDamage(attacker, defender, attackerStrength);
             
-            logMessage(`${attackerPlayer.name}'s ${attacker.type} dealt ${Math.round(attackerStrength)} damage to ${defenderPlayer.name}'s ${defender.type}.`, attacker.player, defender.player);
-            logMessage(`${defenderPlayer.name}'s ${defender.type} dealt ${Math.round(defenderStrength)} damage to ${attackerPlayer.name}'s ${attacker.type}.`, defender.player, attacker.player);
+            defender.health -= defenderDamage;
+            attacker.health -= attackerDamage;
+            
+            // Add armor piercing messages if applicable
+            const attackerArmorMessage = defenderType.armorPiercing ? " (armor piercing)" : "";
+            const defenderArmorMessage = attackerType.armorPiercing ? " (armor piercing)" : "";
+            
+            logMessage(`${attackerPlayer.name}'s ${attacker.type} dealt ${Math.round(defenderDamage)} damage${defenderArmorMessage} to ${defenderPlayer.name}'s ${defender.type}.`, attacker.player, defender.player);
+            logMessage(`${defenderPlayer.name}'s ${defender.type} dealt ${Math.round(attackerDamage)} damage${attackerArmorMessage} to ${attackerPlayer.name}'s ${attacker.type}.`, defender.player, attacker.player);
             
             // Check if either unit is defeated
             if (defender.health <= 0) {
@@ -1362,6 +1391,7 @@ function resolveRangedCombat(attacker, target) {
             }
         }
 
+        // do not remove this, it is important for diplomacy
         attackerPlayer.relations[defenderPlayer.id].hasMet = true;
         defenderPlayer.relations[attackerPlayer.id].hasMet = true;
         
