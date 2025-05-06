@@ -1755,24 +1755,40 @@ function canBuildBuilding(player, buildingType, x, y) {
         if (ny >= 0 && ny < gameState.map.length && nx >= 0 && nx < gameState.map[0].length) {
             const city = findCityAt(nx, ny);
             if (city && city.player === player.id) {
-                // Check if the city already has a library
-                const hasLibrary = gameState.buildings.some(b => 
-                    b.type === 'LIBRARY' && 
-                    b.player === player.id && 
-                    Math.abs(b.x - city.x) + Math.abs(b.y - city.y) <= 1
-                );
-                if (buildingType === 'LIBRARY' && hasLibrary) {
-                    return false; // Prevent building another library for this city
+                // Check for library limit
+                if (buildingType === 'LIBRARY') {
+                    const hasLibrary = gameState.buildings.some(b => 
+                        b.type === 'LIBRARY' && 
+                        b.player === player.id && 
+                        Math.abs(b.x - city.x) + Math.abs(b.y - city.y) <= 1
+                    );
+                    if (hasLibrary) {
+                        return false; // Prevent building another library for this city
+                    }
                 }
 
-                // Check if the city already has 2 granaries
-                const nearbyGranaries = gameState.buildings.filter(b => 
-                    b.type === 'GRANARY' && 
-                    b.player === player.id &&
-                    Math.abs(b.x - city.x) + Math.abs(b.y - city.y) <= 1
-                ).length;
-                if (buildingType === 'GRANARY' && nearbyGranaries >= 2) {
-                    return false; // Prevent building more than 2 granaries per city
+                // Check for university limit
+                if (buildingType === 'UNIVERSITY') {
+                    const hasUniversity = gameState.buildings.some(b => 
+                        b.type === 'UNIVERSITY' && 
+                        b.player === player.id && 
+                        Math.abs(b.x - city.x) + Math.abs(b.y - city.y) <= 1
+                    );
+                    if (hasUniversity) {
+                        return false; // Prevent building another university for this city
+                    }
+                }
+
+                // Check for granary limit
+                if (buildingType === 'GRANARY') {
+                    const nearbyGranaries = gameState.buildings.filter(b => 
+                        b.type === 'GRANARY' && 
+                        b.player === player.id &&
+                        Math.abs(b.x - city.x) + Math.abs(b.y - city.y) <= 1
+                    ).length;
+                    if (nearbyGranaries >= 2) {
+                        return false; // Prevent building more than 2 granaries per city
+                    }
                 }
 
                 return true;
@@ -3661,6 +3677,19 @@ function showCityPanel(city) {
         Math.abs(b.y - city.y) <= 1
     );
 
+    // Check for nearby buildings
+    const hasLibrary = gameState.buildings.some(b =>
+        b.type === 'LIBRARY' &&
+        b.player === player.id &&
+        Math.abs(b.x - city.x) + Math.abs(b.y - city.y) <= 1
+    );
+
+    const hasUniversity = gameState.buildings.some(b =>
+        b.type === 'UNIVERSITY' &&
+        b.player === player.id &&
+        Math.abs(b.x - city.x) + Math.abs(b.y - city.y) <= 1
+    );
+
     // Count nearby granaries
     const nearbyGranaries = gameState.buildings.filter(b => 
         b.type === 'GRANARY' && 
@@ -3730,10 +3759,19 @@ function showCityPanel(city) {
         button.appendChild(buildingInfo);
         button.onclick = () => startBuildingConstruction(city.x, city.y, buildingType);
 
-        // Disable the button if there is an ongoing construction
+        // Disable buttons based on building limits
         if (hasOngoingConstruction) {
             button.disabled = true;
             button.title = "A building is already under construction near this city.";
+        } else if (buildingType === 'LIBRARY' && hasLibrary) {
+            button.disabled = true;
+            button.title = "This city already has a library nearby.";
+        } else if (buildingType === 'UNIVERSITY' && hasUniversity) {
+            button.disabled = true;
+            button.title = "This city already has a university nearby.";
+        } else if (buildingType === 'GRANARY' && nearbyGranaries >= 2) {
+            button.disabled = true;
+            button.title = "This city already has the maximum of 2 granaries nearby.";
         }
 
         buildingProductionElement.appendChild(button);
