@@ -489,7 +489,7 @@ button {
 
 #city-panel {
     position: fixed;
-    top: 50%;
+    top: 75%;
     left: 50%;
     transform: translate(-50%, -50%);
     background-color: #ececec;
