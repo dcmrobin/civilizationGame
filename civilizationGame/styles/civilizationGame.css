@@ -489,13 +489,15 @@ button {
 
 #city-panel {
     position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background-color: #ececec;
     padding: 20px;
     color: black;
     z-index: 1000;
-    max-height: 30vh;
+    max-height: 80vh;
+    max-width: 80%;
     overflow-y: auto;
     box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
 }
@@ -526,7 +528,6 @@ button {
     padding: 15px;
     width: 300px;
     z-index: 1001;
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
 }
 
 .unit-info p, .building-info p {
