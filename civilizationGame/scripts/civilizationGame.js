@@ -3791,6 +3791,9 @@ function startBuildingConstruction(cityX, cityY, buildingType) {
         return;
     }
 
+    // Hide the city panel
+    document.getElementById('city-panel').style.display = 'none';
+
     // Highlight adjacent tiles
     const directions = [
         { dx: 0, dy: -1 }, // Up
