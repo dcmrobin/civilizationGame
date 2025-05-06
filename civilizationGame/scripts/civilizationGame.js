@@ -224,7 +224,14 @@ const gameState = {
         endY: 0
     },
     selectedUnits: new Set(),
-    mapContainer: null
+    mapContainer: null,
+    viewport: {
+        x: 0,
+        y: 0,
+        width: 0,
+        height: 0,
+        tileSize: 20
+    }
 };
 
 let isPanning = false;
@@ -773,19 +780,21 @@ function cleanupCityReferences(city) {
 // Optimized renderMap function with building system
 function renderMap() {
     if (!gameState.mapDirty) return;
-
+    
+    updateViewport();
     const mapElement = document.getElementById('map');
 
     // Clear ALL dynamic elements (units, cities, buildings, highlights)
     const dynamicElements = mapElement.querySelectorAll('.unit, .city, .building, .construction, .attack-range-overlay');
     dynamicElements.forEach(el => el.remove());
 
-    // Redraw all buildings first
+    // Redraw buildings in viewport
     for (const building of gameState.buildings) {
+        if (!isTileInViewport(building.x, building.y)) continue;
+        
         const tileElement = document.querySelector(`.tile[data-x="${building.x}"][data-y="${building.y}"]`);
         if (tileElement) {
             if (building.type.endsWith('_CONSTRUCTION')) {
-                // Construction site
                 const buildingType = building.type.replace('_CONSTRUCTION', '');
                 const buildingDef = BUILDING_TYPES[buildingType];
                 const buildingElement = document.createElement('div');
@@ -794,7 +803,6 @@ function renderMap() {
                 buildingElement.title = `${buildingDef.name} under construction (${building.turnsRemaining} turns left)`;
                 tileElement.appendChild(buildingElement);
             } else {
-                // Completed building
                 const buildingDef = BUILDING_TYPES[building.type];
                 const buildingElement = document.createElement('div');
                 buildingElement.className = `building ${gameState.players[building.player].color} ${building.type.toLowerCase()}`;
@@ -805,32 +813,34 @@ function renderMap() {
         }
     }
 
-    // Rest of the renderMap function remains the same...
-    // Then redraw all cities
+    // Redraw cities in viewport
     for (const player of gameState.players) {
         for (const city of player.cities) {
+            if (!isTileInViewport(city.x, city.y)) continue;
+            
             const tileElement = document.querySelector(`.tile[data-x="${city.x}"][data-y="${city.y}"]`);
             if (tileElement) {
                 const cityElement = document.createElement('div');
                 cityElement.className = `city ${player.color}`;
                 cityElement.textContent = city.name.slice(0, 2);
                 cityElement.style.textShadow = '1px 1px 2px black';
-                cityElement.style.pointerEvents = 'none'; // Make the city element pass through click events
+                cityElement.style.pointerEvents = 'none';
                 tileElement.appendChild(cityElement);
             }
         }
     }
 
-    // Then redraw all units
+    // Redraw units in viewport
     for (const player of gameState.players) {
         for (const unit of player.units) {
+            if (!isTileInViewport(unit.x, unit.y)) continue;
+            
             const tileElement = document.querySelector(`.tile[data-x="${unit.x}"][data-y="${unit.y}"]`);
             if (tileElement) {
                 const unitElement = document.createElement('div');
                 unitElement.className = `unit ${player.color}`;
                 unitElement.textContent = unit.type.slice(0, 2);
                 
-                // Add selection highlight
                 if (gameState.selectedUnits.has(unit.id)) {
                     unitElement.style.boxShadow = '0 0 0 2px yellow';
                 } else if (unit.player === gameState.currentPlayer && unit.moves > 0) {
@@ -842,8 +852,10 @@ function renderMap() {
         }
     }
 
-    // Highlight attack ranges
+    // Highlight attack ranges in viewport
     gameState.highlightedTiles.forEach(({ x, y }) => {
+        if (!isTileInViewport(x, y)) return;
+        
         const tileElement = document.querySelector(`.tile[data-x="${x}"][data-y="${y}"]`);
         if (tileElement) {
             tileElement.classList.add('attack-range');
@@ -858,6 +870,27 @@ function renderInitialMap() {
     const mapElement = document.getElementById('map');
     mapElement.innerHTML = '';
     
+    // Get initial viewport dimensions
+    const mapContainer = document.getElementById('map-container');
+    const rect = mapContainer.getBoundingClientRect();
+    gameState.viewport.width = rect.width;
+    gameState.viewport.height = rect.height;
+    
+    // Calculate visible tiles with padding
+    const padding = 2;
+    const tilesX = Math.ceil(gameState.viewport.width / gameState.viewport.tileSize) + padding * 2;
+    const tilesY = Math.ceil(gameState.viewport.height / gameState.viewport.tileSize) + padding * 2;
+    
+    // Create a container for all tiles
+    const tilesContainer = document.createElement('div');
+    tilesContainer.style.position = 'absolute';
+    tilesContainer.style.display = 'grid';
+    tilesContainer.style.gridTemplateColumns = `repeat(${gameState.map[0].length}, ${gameState.viewport.tileSize}px)`;
+    tilesContainer.style.gridTemplateRows = `repeat(${gameState.map.length}, ${gameState.viewport.tileSize}px)`;
+    tilesContainer.style.gap = '1px';
+    mapElement.appendChild(tilesContainer);
+    
+    // Create all tile elements but only render visible ones
     for (let y = 0; y < gameState.map.length; y++) {
         for (let x = 0; x < gameState.map[y].length; x++) {
             const tile = gameState.map[y][x];
@@ -865,6 +898,8 @@ function renderInitialMap() {
             tileElement.className = `tile ${tile.color}`;
             tileElement.dataset.x = x;
             tileElement.dataset.y = y;
+            tileElement.style.width = `${gameState.viewport.tileSize}px`;
+            tileElement.style.height = `${gameState.viewport.tileSize}px`;
 
             // Add event listeners
             tileElement.addEventListener('mouseenter', (e) => showTileInfo(tile, e));
@@ -872,7 +907,7 @@ function renderInitialMap() {
             tileElement.addEventListener('mouseleave', hideTileInfo);
             tileElement.addEventListener('click', () => handleTileClick(x, y));
 
-            mapElement.appendChild(tileElement);
+            tilesContainer.appendChild(tileElement);
         }
     }
     
@@ -3761,4 +3796,30 @@ function clearSelectionBox() {
     if (existingBox) {
         existingBox.remove();
     }
+}
+
+function updateViewport() {
+    const mapContainer = document.getElementById('map-container');
+    const rect = mapContainer.getBoundingClientRect();
+    
+    gameState.viewport.width = rect.width;
+    gameState.viewport.height = rect.height;
+    gameState.viewport.x = Math.floor(mapContainer.scrollLeft / gameState.viewport.tileSize);
+    gameState.viewport.y = Math.floor(mapContainer.scrollTop / gameState.viewport.tileSize);
+    
+    // Add padding to ensure smooth scrolling
+    const padding = 2;
+    gameState.viewport.x = Math.max(0, gameState.viewport.x - padding);
+    gameState.viewport.y = Math.max(0, gameState.viewport.y - padding);
+}
+
+function isTileInViewport(x, y) {
+    const viewport = gameState.viewport;
+    const tilesX = Math.ceil(viewport.width / viewport.tileSize) + 2;
+    const tilesY = Math.ceil(viewport.height / viewport.tileSize) + 2;
+    
+    return x >= viewport.x && 
+           x < viewport.x + tilesX && 
+           y >= viewport.y && 
+           y < viewport.y + tilesY;
 }
