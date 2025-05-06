@@ -2662,27 +2662,37 @@ function aiTurn(aiPlayer) {
                     // Check if the AI has researched Pottery and has enough gold for a Granary
                     if (aiPlayer.researchedTechs.has('POTTERY') && aiPlayer.gold >= BUILDING_TYPES.GRANARY.goldCost) {
                         for (const city of aiPlayer.cities) {
-            const directions = [
-                { dx: 0, dy: -1 }, { dx: 1, dy: 0 },
-                { dx: 0, dy: 1 }, { dx: -1, dy: 0 }
-                            ].sort(() => Math.random() - 0.5);
+                            // Count nearby granaries
+                            const nearbyGranaries = gameState.buildings.filter(b => 
+                                b.type === 'GRANARY' && 
+                                b.player === aiPlayer.id &&
+                                Math.abs(b.x - city.x) + Math.abs(b.y - city.y) <= 1
+                            ).length;
 
-            for (const dir of directions) {
-                const nx = city.x + dir.dx;
-                const ny = city.y + dir.dy;
+                            // Only try to build if we haven't reached the limit
+                            if (nearbyGranaries < 2) {
+                                const directions = [
+                                    { dx: 0, dy: -1 }, { dx: 1, dy: 0 },
+                                    { dx: 0, dy: 1 }, { dx: -1, dy: 0 }
+                                ].sort(() => Math.random() - 0.5);
 
-                if (ny >= 0 && ny < gameState.map.length &&
-                    nx >= 0 && nx < gameState.map[0].length &&
-                                    canBuildBuilding(aiPlayer, 'GRANARY', nx, ny)) {
-                    
-                                    if (buildBuilding(aiPlayer, 'GRANARY', nx, ny)) {
-                                        logMessage(`${aiPlayer.name} started building a Granary near ${city.name}.`, aiPlayer.id);
-                        break;
+                                for (const dir of directions) {
+                                    const nx = city.x + dir.dx;
+                                    const ny = city.y + dir.dy;
+
+                                    if (ny >= 0 && ny < gameState.map.length &&
+                                        nx >= 0 && nx < gameState.map[0].length &&
+                                        canBuildBuilding(aiPlayer, 'GRANARY', nx, ny)) {
+                                        
+                                        if (buildBuilding(aiPlayer, 'GRANARY', nx, ny)) {
+                                            logMessage(`${aiPlayer.name} started building a Granary near ${city.name}.`, aiPlayer.id);
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
-                }
-            }
-        }
-    }
                 }
                 continue;
             }
@@ -2690,29 +2700,74 @@ function aiTurn(aiPlayer) {
             // Fallback to economic units if nothing else and not at war
             if (options.length === 0 && aiPlayer.units.length < aiPlayer.cities.length * 3 && !isAtWar && !isUnderThreat) {
                 // Consider building a library if we don't have one
-                if (aiPlayer.researchedTechs.has('WRITING') && 
-                    !gameState.buildings.some(b => b.type === 'LIBRARY' && b.player === aiPlayer.id)) {
+                if (aiPlayer.researchedTechs.has('WRITING')) {
                     // Try to build a library
-                        const directions = [
-                            { dx: 0, dy: -1 }, { dx: 1, dy: 0 },
-                            { dx: 0, dy: 1 }, { dx: -1, dy: 0 }
-                    ].sort(() => Math.random() - 0.5);
+                    for (const city of aiPlayer.cities) {
+                        // Check if this city already has a library nearby
+                        const hasLibrary = gameState.buildings.some(b =>
+                            b.type === 'LIBRARY' &&
+                            b.player === aiPlayer.id &&
+                            Math.abs(b.x - city.x) + Math.abs(b.y - city.y) <= 1
+                        );
 
-                        for (const dir of directions) {
-                            const nx = city.x + dir.dx;
-                            const ny = city.y + dir.dy;
+                        if (!hasLibrary) {
+                            const directions = [
+                                { dx: 0, dy: -1 }, { dx: 1, dy: 0 },
+                                { dx: 0, dy: 1 }, { dx: -1, dy: 0 }
+                            ].sort(() => Math.random() - 0.5);
 
-                            if (ny >= 0 && ny < gameState.map.length &&
-                                nx >= 0 && nx < gameState.map[0].length &&
-                            canBuildBuilding(aiPlayer, 'LIBRARY', nx, ny)) {
-                                
-                            if (buildBuilding(aiPlayer, 'LIBRARY', nx, ny)) {
-                                logMessage(`${aiPlayer.name} started building a Library near ${city.name}.`, aiPlayer.id);
-                                    break;
+                            for (const dir of directions) {
+                                const nx = city.x + dir.dx;
+                                const ny = city.y + dir.dy;
+
+                                if (ny >= 0 && ny < gameState.map.length &&
+                                    nx >= 0 && nx < gameState.map[0].length &&
+                                    canBuildBuilding(aiPlayer, 'LIBRARY', nx, ny)) {
+                                    
+                                    if (buildBuilding(aiPlayer, 'LIBRARY', nx, ny)) {
+                                        logMessage(`${aiPlayer.name} started building a Library near ${city.name}.`, aiPlayer.id);
+                                        break;
+                                    }
                                 }
                             }
                         }
                     }
+                }
+
+                // Consider building a university if we have Scientific Theory
+                if (aiPlayer.researchedTechs.has('SCIENTIFIC_THEORY')) {
+                    // Try to build a university
+                    for (const city of aiPlayer.cities) {
+                        // Check if this city already has a university nearby
+                        const hasUniversity = gameState.buildings.some(b =>
+                            b.type === 'UNIVERSITY' &&
+                            b.player === aiPlayer.id &&
+                            Math.abs(b.x - city.x) + Math.abs(b.y - city.y) <= 1
+                        );
+
+                        if (!hasUniversity) {
+                            const directions = [
+                                { dx: 0, dy: -1 }, { dx: 1, dy: 0 },
+                                { dx: 0, dy: 1 }, { dx: -1, dy: 0 }
+                            ].sort(() => Math.random() - 0.5);
+
+                            for (const dir of directions) {
+                                const nx = city.x + dir.dx;
+                                const ny = city.y + dir.dy;
+
+                                if (ny >= 0 && ny < gameState.map.length &&
+                                    nx >= 0 && nx < gameState.map[0].length &&
+                                    canBuildBuilding(aiPlayer, 'UNIVERSITY', nx, ny)) {
+                                    
+                                    if (buildBuilding(aiPlayer, 'UNIVERSITY', nx, ny)) {
+                                        logMessage(`${aiPlayer.name} started building a University near ${city.name}.`, aiPlayer.id);
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
 
             if (options.length > 0) {
