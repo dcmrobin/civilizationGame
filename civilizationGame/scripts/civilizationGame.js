@@ -11,21 +11,21 @@ const TILE_TYPES = {
 };
 
 const UNIT_TYPES = {
-    SETTLER: { name: 'Settler', description: "Able to found cities", cost: 30, goldCost: 50, strength: 0, move: 1, production: ['CITY'], foodConsumption: 2 },
-    SCOUT: { name: 'Scout', cost: 5, description: "Able to move quicker over harder terrain", goldCost: 10, strength: 5, move: 3, range: 1, production: ['CITY'], foodConsumption: 1 },
-    WARRIOR: { name: 'Warrior', description: "Basic attack unit", cost: 10, goldCost: 30, strength: 20, move: 1, range: 1, production: ['CITY'], foodConsumption: 1 },
-    ARCHER: { name: 'Archer', description: "Ranged attack unit", cost: 20, goldCost: 40, strength: 15, move: 1, range: 2, production: ['CITY'], requires: 'ARCHERY', foodConsumption: 1 },
-    SPEARMAN: { name: 'Spearman', description: "Stronger attack unit", cost: 20, goldCost: 50, strength: 15, move: 2, range: 1, production: ['CITY'], requires: 'BRONZE_WORKING', foodConsumption: 1 },
-    GALLEY: { name: 'Galley', description: "Basic naval unit for exploration and combat", cost: 30, goldCost: 120, strength: 10, move: 3, production: ['PORT'], requires: 'SEAFARING', naval: true, foodConsumption: 3 },
-    SWORDSMAN: { name: 'Swordsman', description: "Powerful melee unit with iron weapons", cost: 35, goldCost: 80, strength: 30, move: 1, range: 1, production: ['CITY'], requires: 'IRON_WORKING', foodConsumption: 2 },
-    CATAPULT: { name: 'Catapult', description: "Siege weapon with long range but vulnerable up close", cost: 40, goldCost: 100, strength: 25, move: 1, range: 3, production: ['CITY'], requires: 'MATHEMATICS', foodConsumption: 3 },
-    HORSEMAN: { name: 'Horseman', description: "Fast cavalry unit with high mobility", cost: 30, goldCost: 90, strength: 25, move: 3, range: 1, production: ['CITY'], requires: 'HORSEBACK_RIDING', foodConsumption: 2 },
-    TRIREME: { name: 'Trireme', description: "Stronger naval unit for coastal warfare", cost: 40, goldCost: 150, strength: 25, move: 3, production: ['PORT'], requires: 'NAVAL_WARFARE', naval: true, foodConsumption: 4 },
-    CROSSBOWMAN: { name: 'Crossbowman', description: "Advanced ranged unit with armor penetration", cost: 45, goldCost: 120, strength: 35, move: 1, range: 2, production: ['CITY'], requires: 'MACHINERY', foodConsumption: 2 },
-    KNIGHT: { name: 'Knight', description: "Heavy cavalry with strong attack and defense", cost: 50, goldCost: 150, strength: 40, move: 2, range: 1, production: ['CITY'], requires: 'CHIVALRY', foodConsumption: 3 },
-    CANNON: { name: 'Cannon', description: "Powerful siege weapon with area damage", cost: 60, goldCost: 180, strength: 45, move: 1, range: 3, production: ['CITY'], requires: 'GUNPOWDER', foodConsumption: 4 },
-    FRIGATE: { name: 'Frigate', description: "Advanced naval unit with ranged attacks", cost: 70, goldCost: 200, strength: 50, move: 4, range: 2, production: ['PORT'], requires: 'NAVIGATION', naval: true, foodConsumption: 5 },
-    MUSKETEER: { name: 'Musketeer', description: "Early gunpowder infantry unit", cost: 55, goldCost: 160, strength: 45, move: 1, range: 2, production: ['CITY'], requires: 'GUNPOWDER', foodConsumption: 3 }
+    SETTLER: { name: 'Settler', description: "Able to found cities", cost: 30, goldCost: 50, strength: 0, move: 1, production: ['CITY'], foodConsumption: 2, health: 20 },
+    SCOUT: { name: 'Scout', cost: 5, description: "Able to move quicker over harder terrain", goldCost: 10, strength: 5, move: 3, range: 1, production: ['CITY'], foodConsumption: 1, health: 15 },
+    WARRIOR: { name: 'Warrior', description: "Basic attack unit", cost: 10, goldCost: 30, strength: 20, move: 1, range: 1, production: ['CITY'], foodConsumption: 1, health: 30 },
+    ARCHER: { name: 'Archer', description: "Ranged attack unit", cost: 20, goldCost: 40, strength: 15, move: 1, range: 2, production: ['CITY'], requires: 'ARCHERY', foodConsumption: 1, health: 20 },
+    SPEARMAN: { name: 'Spearman', description: "Stronger attack unit", cost: 20, goldCost: 50, strength: 15, move: 2, range: 1, production: ['CITY'], requires: 'BRONZE_WORKING', foodConsumption: 1, health: 25 },
+    GALLEY: { name: 'Galley', description: "Basic naval unit for exploration and combat", cost: 30, goldCost: 120, strength: 10, move: 3, production: ['PORT'], requires: 'SEAFARING', naval: true, foodConsumption: 3, health: 25 },
+    SWORDSMAN: { name: 'Swordsman', description: "Powerful melee unit with iron weapons", cost: 35, goldCost: 80, strength: 30, move: 1, range: 1, production: ['CITY'], requires: 'IRON_WORKING', foodConsumption: 2, health: 40 },
+    CATAPULT: { name: 'Catapult', description: "Siege weapon with long range but vulnerable up close", cost: 40, goldCost: 100, strength: 25, move: 1, range: 3, production: ['CITY'], requires: 'MATHEMATICS', foodConsumption: 3, health: 20 },
+    HORSEMAN: { name: 'Horseman', description: "Fast cavalry unit with high mobility", cost: 30, goldCost: 90, strength: 25, move: 3, range: 1, production: ['CITY'], requires: 'HORSEBACK_RIDING', foodConsumption: 2, health: 35 },
+    TRIREME: { name: 'Trireme', description: "Stronger naval unit for coastal warfare", cost: 40, goldCost: 150, strength: 25, move: 3, production: ['PORT'], requires: 'NAVAL_WARFARE', naval: true, foodConsumption: 4, health: 35 },
+    CROSSBOWMAN: { name: 'Crossbowman', description: "Advanced ranged unit with armor penetration", cost: 45, goldCost: 120, strength: 35, move: 1, range: 2, production: ['CITY'], requires: 'MACHINERY', foodConsumption: 2, health: 30 },
+    KNIGHT: { name: 'Knight', description: "Heavy cavalry with strong attack and defense", cost: 50, goldCost: 150, strength: 40, move: 2, range: 1, production: ['CITY'], requires: 'CHIVALRY', foodConsumption: 3, health: 50 },
+    CANNON: { name: 'Cannon', description: "Powerful siege weapon with area damage", cost: 60, goldCost: 180, strength: 45, move: 1, range: 3, production: ['CITY'], requires: 'GUNPOWDER', foodConsumption: 4, health: 30 },
+    FRIGATE: { name: 'Frigate', description: "Advanced naval unit with ranged attacks", cost: 70, goldCost: 200, strength: 50, move: 4, range: 2, production: ['PORT'], requires: 'NAVIGATION', naval: true, foodConsumption: 5, health: 45 },
+    MUSKETEER: { name: 'Musketeer', description: "Early gunpowder infantry unit", cost: 55, goldCost: 160, strength: 45, move: 1, range: 2, production: ['CITY'], requires: 'GUNPOWDER', foodConsumption: 3, health: 40 }
 };
 
 // Building types
@@ -841,6 +841,26 @@ function renderMap() {
                 unitElement.className = `unit ${player.color}`;
                 unitElement.textContent = unit.type.slice(0, 2);
                 
+                // Add health bar
+                const healthBar = document.createElement('div');
+                healthBar.className = 'unit-health-bar';
+                const healthFill = document.createElement('div');
+                healthFill.className = 'unit-health-fill';
+                
+                // Calculate health percentage
+                const healthPercent = (unit.health / unit.maxHealth) * 100;
+                healthFill.style.width = `${healthPercent}%`;
+                
+                // Add color classes based on health percentage
+                if (healthPercent <= 25) {
+                    healthFill.classList.add('critical');
+                } else if (healthPercent <= 50) {
+                    healthFill.classList.add('damaged');
+                }
+                
+                healthBar.appendChild(healthFill);
+                unitElement.appendChild(healthBar);
+                
                 if (gameState.selectedUnits.has(unit.id)) {
                     unitElement.style.boxShadow = '0 0 0 2px yellow';
                 } else if (unit.player === gameState.currentPlayer && unit.moves > 0) {
@@ -1314,19 +1334,39 @@ function resolveRangedCombat(attacker, target) {
         
         // For ranged units, they don't take damage in return
         if (attackerType.range > 1) {
-            // Ranged units always win against melee units
-            defenderPlayer.units = defenderPlayer.units.filter(u => u !== defender);
-            logMessage(`${attackerPlayer.name}'s ${attacker.type} defeated ${defenderPlayer.name}'s ${defender.type} from range.`, attacker.player, defender.player);
-        } else {
-            // Melee combat
-            if (attackerStrength > defenderStrength) {
+            // Deal damage to defender
+            defender.health -= attackerStrength;
+            logMessage(`${attackerPlayer.name}'s ${attacker.type} dealt ${Math.round(attackerStrength)} damage to ${defenderPlayer.name}'s ${defender.type}.`, attacker.player, defender.player);
+            
+            // Check if defender is defeated
+            if (defender.health <= 0) {
                 defenderPlayer.units = defenderPlayer.units.filter(u => u !== defender);
-                logMessage(`${attackerPlayer.name}'s ${attacker.type} defeated ${defenderPlayer.name}'s ${defender.type} but took damage.`, attacker.player, defender.player);
-            } else {
+                logMessage(`${defenderPlayer.name}'s ${defender.type} has been defeated!`, attacker.player, defender.player);
+            }
+        } else {
+            // Melee combat - both units take damage
+            defender.health -= attackerStrength;
+            attacker.health -= defenderStrength;
+            
+            logMessage(`${attackerPlayer.name}'s ${attacker.type} dealt ${Math.round(attackerStrength)} damage to ${defenderPlayer.name}'s ${defender.type}.`, attacker.player, defender.player);
+            logMessage(`${defenderPlayer.name}'s ${defender.type} dealt ${Math.round(defenderStrength)} damage to ${attackerPlayer.name}'s ${attacker.type}.`, defender.player, attacker.player);
+            
+            // Check if either unit is defeated
+            if (defender.health <= 0) {
+                defenderPlayer.units = defenderPlayer.units.filter(u => u !== defender);
+                logMessage(`${defenderPlayer.name}'s ${defender.type} has been defeated!`, attacker.player, defender.player);
+            }
+            if (attacker.health <= 0) {
                 attackerPlayer.units = attackerPlayer.units.filter(u => u !== attacker);
-                logMessage(`${defenderPlayer.name}'s ${defender.type} defeated ${attackerPlayer.name}'s ${attacker.type} but took damage.`, defender.player, attacker.player);
+                logMessage(`${attackerPlayer.name}'s ${attacker.type} has been defeated!`, defender.player, attacker.player);
             }
         }
+
+        attackerPlayer.relations[defenderPlayer.id].hasMet = true;
+        defenderPlayer.relations[attackerPlayer.id].hasMet = true;
+        
+        defenderPlayer.relations[attackerPlayer.id].attitude = Math.max(0, defenderPlayer.relations[attackerPlayer.id].attitude - 10);
+        attackerPlayer.relations[defenderPlayer.id].attitude = Math.max(0, attackerPlayer.relations[defenderPlayer.id].attitude - 10);
         
         attacker.hasAttacked = true;
         gameState.mapDirty = true;
@@ -2099,7 +2139,9 @@ function processPlayerTurn(player) {
                     moves: UNIT_TYPES[city.currentProduction].move,
                     remainingMoves: 0,
                     player: player.id,
-                    hasAttacked: false
+                    hasAttacked: false,
+                    health: UNIT_TYPES[city.currentProduction].health,
+                    maxHealth: UNIT_TYPES[city.currentProduction].health
                 };
 
                 const directions = [
@@ -3708,23 +3750,20 @@ function startBuildingConstruction(cityX, cityY, buildingType) {
 }
 
 function startUnitProduction(unitType, x, y) {
-    const player = gameState.players[gameState.currentPlayer];
     const city = findCityAt(x, y);
-    
-    if (city.currentProduction) {
-        alert("This city is already producing something!");
-        return;
-    }
+    if (!city) return;
 
+    const player = gameState.players[city.player];
     const unitDef = UNIT_TYPES[unitType];
-    
+
     if (player.gold >= unitDef.goldCost) {
         player.gold -= unitDef.goldCost;
         city.currentProduction = unitType;
-        city.production = 0; // Reset production counter
+        city.production = 0;
+        logMessage(`Started production of ${unitDef.name} in ${city.name}.`, player.id);
         updateUI();
     } else {
-        alert("Not enough gold to start production!");
+        alert("Not enough gold!");
     }
 }
 
