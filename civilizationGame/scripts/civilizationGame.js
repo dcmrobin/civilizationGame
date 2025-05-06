@@ -2190,6 +2190,7 @@ function processPlayerTurn(player) {
                     maxHealth: UNIT_TYPES[city.currentProduction].health
                 };
 
+                // First try adjacent tiles
                 const directions = [
                     { dx: 0, dy: -1 }, { dx: 1, dy: 0 },
                     { dx: 0, dy: 1 }, { dx: -1, dy: 0 }
@@ -2206,9 +2207,54 @@ function processPlayerTurn(player) {
                     }
                 }
 
-                player.units.push(unit);
-                city.production = 0;
-                city.currentProduction = null;
+                // If no adjacent tile is available, search for the nearest empty tile
+                if (!placed) {
+                    const visited = new Set();
+                    const queue = [{ x: city.x, y: city.y, distance: 0 }];
+                    visited.add(`${city.x},${city.y}`);
+
+                    while (queue.length > 0) {
+                        const current = queue.shift();
+                        
+                        // Check all 8 directions
+                        const searchDirections = [
+                            { dx: 0, dy: -1 }, { dx: 1, dy: 0 },
+                            { dx: 0, dy: 1 }, { dx: -1, dy: 0 },
+                            { dx: -1, dy: -1 }, { dx: 1, dy: -1 },
+                            { dx: -1, dy: 1 }, { dx: 1, dy: 1 }
+                        ];
+
+                        for (const dir of searchDirections) {
+                            const nx = current.x + dir.dx;
+                            const ny = current.y + dir.dy;
+                            const key = `${nx},${ny}`;
+
+                            if (visited.has(key)) continue;
+                            if (ny < 0 || ny >= gameState.map.length || nx < 0 || nx >= gameState.map[0].length) continue;
+                            
+                            visited.add(key);
+
+                            if (canMoveTo(unit, nx, ny, true) && !findUnitAt(nx, ny) && !findCityAt(nx, ny)) {
+                                unit.x = nx;
+                                unit.y = ny;
+                                placed = true;
+                                break;
+                            }
+
+                            queue.push({ x: nx, y: ny, distance: current.distance + 1 });
+                        }
+
+                        if (placed) break;
+                    }
+                }
+
+                if (placed) {
+                    player.units.push(unit);
+                    city.production = 0;
+                    city.currentProduction = null;
+                } else {
+                    logMessage(`Could not find a valid tile to place the new ${UNIT_TYPES[city.currentProduction].name} in ${city.name}.`, player.id);
+                }
             }
         }
     }
