@@ -3632,17 +3632,21 @@ function selectTech(techId) {
 }
 
 function showCityPanel(city) {
-    const cityInfoElement = document.getElementById('city-info');
-    const cityProductionElement = document.getElementById('city-production');
     const player = gameState.players[city.player];
-
-    cityInfoElement.innerHTML = `
+    const panel = document.getElementById('city-panel');
+    const infoElement = document.getElementById('city-info');
+    const productionElement = document.getElementById('city-production');
+    
+    // Update city info
+    infoElement.innerHTML = `
         <h4>${city.name}</h4>
-        <p>Production: ${city.production}/${city.currentProduction ? UNIT_TYPES[city.currentProduction]?.cost : '0'}</p>
-        <p>Gold: ${player.gold}</p>
+        <p>Food: ${city.food}</p>
+        <p>Production: ${city.production}</p>
+        <p>Current Production: ${city.currentProduction ? UNIT_TYPES[city.currentProduction]?.name || BUILDING_TYPES[city.currentProduction]?.name : 'None'}</p>
     `;
 
-    cityProductionElement.innerHTML = `
+    // Create production options
+    productionElement.innerHTML = `
         <h5>Units:</h5>
         <div id="unit-production"></div>
         <h5>Buildings:</h5>
@@ -3674,7 +3678,26 @@ function showCityPanel(city) {
 
         const button = document.createElement('button');
         button.textContent = `${unitDef.name} (${unitDef.goldCost} gold)`;
-        button.title = unitDef.description || "No description available";
+        
+        // Create detailed unit info
+        const unitInfo = document.createElement('div');
+        unitInfo.className = 'unit-info';
+        unitInfo.innerHTML = `
+            <h6>${unitDef.name}</h6>
+            <p>${unitDef.description}</p>
+            <ul>
+                <li>Strength: ${unitDef.strength}</li>
+                <li>Health: ${unitDef.health}</li>
+                <li>Armor: ${unitDef.armor}</li>
+                <li>Movement: ${unitDef.move}</li>
+                <li>Range: ${unitDef.range || 1}</li>
+                <li>Food Consumption: ${unitDef.foodConsumption}</li>
+                ${unitDef.armorPiercing ? '<li>Armor Piercing</li>' : ''}
+                ${unitDef.naval ? '<li>Naval Unit</li>' : ''}
+            </ul>
+        `;
+        
+        button.appendChild(unitInfo);
         button.onclick = () => startUnitProduction(unitType, city.x, city.y);
         unitProductionElement.appendChild(button);
     }
@@ -3689,7 +3712,23 @@ function showCityPanel(city) {
 
         const button = document.createElement('button');
         button.textContent = `${buildingDef.name} (${buildingDef.goldCost} gold)`;
-        button.title = buildingDef.description || "No description available";
+        
+        // Create detailed building info
+        const buildingInfo = document.createElement('div');
+        buildingInfo.className = 'building-info';
+        buildingInfo.innerHTML = `
+            <h6>${buildingDef.name}</h6>
+            <p>${buildingDef.description}</p>
+            <ul>
+                <li>Health: ${buildingDef.health}</li>
+                <li>Construction Time: ${buildingDef.constructionTurns} turns</li>
+                ${buildingDef.effects.food ? `<li>Food Bonus: +${buildingDef.effects.food}</li>` : ''}
+                ${buildingDef.effects.researchMultiplier ? `<li>Research Bonus: +${Math.round((buildingDef.effects.researchMultiplier - 1) * 100)}%</li>` : ''}
+            </ul>
+        `;
+        
+        button.appendChild(buildingInfo);
+        button.onclick = () => startBuildingConstruction(city.x, city.y, buildingType);
 
         // Disable the button if there is an ongoing construction
         if (hasOngoingConstruction) {
@@ -3697,30 +3736,10 @@ function showCityPanel(city) {
             button.title = "A building is already under construction near this city.";
         }
 
-        // Check for library limit
-        if (buildingType === 'LIBRARY') {
-            const hasLibrary = gameState.buildings.some(b =>
-                b.type === 'LIBRARY' &&
-                b.player === player.id &&
-                Math.abs(b.x - city.x) + Math.abs(b.y - city.y) <= 1
-            );
-            if (hasLibrary) {
-                button.disabled = true;
-                button.title = "A library already exists near this city.";
-            }
-        }
-
-        // Check for granary limit
-        if (buildingType === 'GRANARY' && nearbyGranaries >= 2) {
-            button.disabled = true;
-            button.title = "This city already has the maximum of 2 granaries nearby.";
-        }
-
-        button.onclick = () => startBuildingConstruction(city.x, city.y, buildingType);
         buildingProductionElement.appendChild(button);
     }
 
-    document.getElementById('city-panel').style.display = 'block';
+    panel.style.display = 'block';
 }
 
 function startBuildingConstruction(cityX, cityY, buildingType) {
